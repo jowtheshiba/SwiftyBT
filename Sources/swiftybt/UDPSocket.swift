@@ -26,7 +26,7 @@ public class UDPSocket {
     
     /// Create UDP socket
     private func createSocket() throws {
-        socketFD = socket(AF_INET, SOCK_DGRAM, 0)
+        socketFD = socket(AF_INET, Int32(SOCK_DGRAM), 0)
         if socketFD == -1 {
             throw UDPSocketError.socketCreationFailed
         }
@@ -105,8 +105,6 @@ public class UDPSocket {
         
         // Receive response
         var buffer = [UInt8](repeating: 0, count: 4096)
-        var fromAddr = sockaddr_in()
-        var fromAddrLen = socklen_t(MemoryLayout<sockaddr_in>.size)
         
         // Use a simpler approach without complex pointer manipulation
         let receiveResult = buffer.withUnsafeMutableBytes { buffer in
@@ -132,8 +130,8 @@ public class UDPSocket {
     private func resolveAddress(host: String, port: UInt16) throws -> sockaddr_in {
         var hints = addrinfo()
         hints.ai_family = AF_INET
-        hints.ai_socktype = SOCK_DGRAM
-        hints.ai_protocol = IPPROTO_UDP
+        hints.ai_socktype = Int32(SOCK_DGRAM)
+        hints.ai_protocol = Int32(IPPROTO_UDP)
         
         var result: UnsafeMutablePointer<addrinfo>?
         let status = getaddrinfo(host, String(port), &hints, &result)
