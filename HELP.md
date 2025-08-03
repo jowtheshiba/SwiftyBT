@@ -1,9 +1,6 @@
 # SwiftyBT - Detailed Documentation
 
-[![Swift](https://img.shields.io/badge/Swift-5.9+-orange.svg)](https://swift.org)
-[![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20iOS-blue.svg)](https://swift.org)
-
-Comprehensive documentation for SwiftyBT - a modern BitTorrent client library for Swift.
+Documentation for SwiftyBT 
 
 ## 📋 Table of Contents
 
