@@ -50,10 +50,10 @@ The library is designed with performance and scalability in mind, utilizing mode
 
 ## 📋 Requirements
 
-- **Swift**: 5.9+
+- **Swift**: 6.0+
 - **Platforms**: 
   - macOS 13.0+
-  - iOS 16.0+
+  - Linux
 - **Dependencies**:
   - Swift Crypto 2.0.0+
   - Swift NIO 2.0.0+
