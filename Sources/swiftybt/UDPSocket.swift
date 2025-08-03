@@ -26,29 +26,29 @@ public class UDPSocket {
     
     /// Create UDP socket
     private func createSocket() throws {
-        #if canImport(Darwin)
-        socketFD = socket(AF_INET, Int32(SOCK_DGRAM), 0)
-        #else
-        socketFD = socket(AF_INET, SOCK_DGRAM, 0)
-        #endif
-        if socketFD == -1 {
-            throw UDPSocketError.socketCreationFailed
-        }
-        
-        // Set socket options
-        var timeoutValue = timeval(tv_sec: Int(timeout), tv_usec: 0)
-        let result = setsockopt(socketFD, SOL_SOCKET, SO_RCVTIMEO, &timeoutValue, socklen_t(MemoryLayout<timeval>.size))
-        if result == -1 {
-            throw UDPSocketError.socketOptionFailed
-        }
-        
-        // Set send timeout
-        let sendResult = setsockopt(socketFD, SOL_SOCKET, SO_SNDTIMEO, &timeoutValue, socklen_t(MemoryLayout<timeval>.size))
-        if sendResult == -1 {
-            throw UDPSocketError.socketOptionFailed
-        }
+    #if canImport(Darwin)
+    socketFD = socket(AF_INET, Int32(SOCK_DGRAM), 0)
+    #else
+    socketFD = socket(AF_INET, Int32(SOCK_DGRAM.rawValue), 0)
+    #endif
+    if socketFD == -1 {
+        throw UDPSocketError.socketCreationFailed
     }
+
     
+
+    // Set socket options
+    var timeoutValue = timeval(tv_sec: Int(timeout), tv_usec: 0)
+    let result = setsockopt(socketFD, SOL_SOCKET, SO_RCVTIMEO, &timeoutValue, socklen_t(MemoryLayout<timeval>.size))
+    if result == -1 {
+        throw UDPSocketError.socketOptionFailed
+    }
+
+    let sendResult = setsockopt(socketFD, SOL_SOCKET, SO_SNDTIMEO, &timeoutValue, socklen_t(MemoryLayout<timeval>.size))
+    if sendResult == -1 {
+        throw UDPSocketError.socketOptionFailed
+    }
+}
     /// Send data to specified host and port
     /// - Parameters:
     ///   - data: Data to send
@@ -138,8 +138,8 @@ public class UDPSocket {
         hints.ai_socktype = Int32(SOCK_DGRAM)
         hints.ai_protocol = Int32(IPPROTO_UDP)
         #else
-        hints.ai_socktype = SOCK_DGRAM
-        hints.ai_protocol = IPPROTO_UDP
+        hints.ai_socktype = Int32(SOCK_DGRAM.rawValue)
+        hints.ai_protocol = Int32(IPPROTO_UDP)
         #endif
         
         var result: UnsafeMutablePointer<addrinfo>?
