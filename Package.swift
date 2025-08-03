@@ -34,7 +34,7 @@ let package = Package(
                 .product(name: "NIOSSL", package: "swift-nio-ssl"),
                 .product(name: "Logging", package: "swift-log")
             ],
-            path: "Sources"),
+            path: "Sources/swiftybt"),
         .executableTarget(
             name: "SwiftyBTExample",
             dependencies: ["SwiftyBT"],

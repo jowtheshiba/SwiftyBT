@@ -14,7 +14,7 @@ let package = Package(
             targets: ["CLTSwiftyBT"]),
     ],
     dependencies: [
-        .package(path: "../"),
+        .package(path: "../../"),
     ],
     targets: [
         .executableTarget(
