@@ -7,19 +7,19 @@ public class UDPTrackersProvider {
     /// - Returns: Array of UDP tracker URLs
     public static func getAllUDPTrackers() -> [String] {
         return [
-            // Самые надежные трекеры (проверенные и работающие)
+            // Most reliable trackers (tested and working)
             "http://tracker.opentrackr.org:1337/announce",
             "http://open.demonii.com:1337/announce",
             "http://open.stealth.si:80/announce",
             
-            // Дополнительные надежные трекеры
+            // Additional reliable trackers
             "http://tracker2.dler.org:80/announce",
             "http://tracker.dler.org:6969/announce",
             "http://tracker.bittor.pw:1337/announce",
             "http://public.tracker.vraphim.com:6969/announce",
             "http://p4p.arenabg.com:1337/announce",
             
-            // UDP трекеры (более надежные)
+            // UDP trackers (more reliable)
             "udp://tracker.opentrackr.org:1337/announce",
             "udp://open.demonii.com:1337/announce",
             "udp://tracker2.dler.org:80/announce",

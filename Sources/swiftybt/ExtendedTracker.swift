@@ -69,7 +69,7 @@ public class ExtendedTrackerClient {
     ) async throws -> ExtendedTrackerResponse {
         let allTrackers = getAllTrackers(for: torrentFile)
         
-        // Фильтруем трекеры, которые часто не работают
+        // Filter trackers that often don't work
         let filteredTrackers = filterWorkingTrackers(allTrackers)
         
         logger.info("Announcing to \(filteredTrackers.count) trackers (filtered from \(allTrackers.count))")
@@ -325,7 +325,7 @@ public class ExtendedTrackerClient {
     /// - Returns: Filtered array of tracker URLs
     private func filterWorkingTrackers(_ trackers: [String]) -> [String] {
         let problematicTrackers: Set<String> = [
-            // Удаляем все проблемные трекеры из предыдущих тестов
+            // Remove all problematic trackers from previous tests
             "http://ipv4announce.sktorrent.eu:6969/announce",
             "http://retracker01-msk-virt.corbina.net:80/announce",
             "http://tracker.tryhackx.org:6969/announce",

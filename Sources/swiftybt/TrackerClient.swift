@@ -56,11 +56,11 @@ public class TrackerClient {
             )
         }
         
-        // BitTorrent spec: info_hash и peer_id должны быть вручную закодированы как raw bytes -> %XX
+        // BitTorrent spec: info_hash and peer_id must be manually encoded as raw bytes -> %XX
         let infoHashEncoded = infoHash.map { String(format: "%%%02x", $0) }.joined()
         let peerIdEncoded = peerId.map { String(format: "%%%02x", $0) }.joined()
         
-        // Создаем URL вручную для правильного кодирования BitTorrent параметров
+        // Create URL manually for proper BitTorrent parameter encoding
         var urlString = baseURL.absoluteString
         urlString += baseURL.query != nil ? "&" : "?"
         urlString += "info_hash=\(infoHashEncoded)&peer_id=\(peerIdEncoded)&port=\(port)&uploaded=\(uploaded)&downloaded=\(downloaded)&left=\(left)&event=\(event.rawValue)&compact=1"
@@ -157,7 +157,7 @@ public class TrackerClient {
         request.setValue("*/*", forHTTPHeaderField: "Accept")
         request.setValue("close", forHTTPHeaderField: "Connection")
         
-        // Уменьшаем таймаут для более быстрого обнаружения проблемных трекеров
+        // Reduce timeout for faster detection of problematic trackers
         request.timeoutInterval = 15.0
         
         logger.debug("Sending request to: \(url)")

@@ -8,7 +8,7 @@ struct CLTSwiftyBT {
         // Configure logging
         LoggingSystem.bootstrap { label in
             var handler = StreamLogHandler.standardOutput(label: label)
-            handler.logLevel = .info // Увеличиваем уровень логирования
+            handler.logLevel = .info // Increase logging level
             return handler
         }
         print("🌊 SwiftyBT CLI Tool v1.0")

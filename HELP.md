@@ -1,31 +1,31 @@
 # SwiftyBT - Detailed Documentation
 
-Documentation for SwiftyBT 
+Documentation for SwiftyBT - A modern BitTorrent client library written in Swift.
 
 ## 📋 Table of Contents
 
-- [Overview](#overview)
-- [Features](#features)
-- [Requirements](#requirements)
-- [Installation](#installation)
-- [Core Components](#architecture)
-- [Concurrency Model](#concurrency-model)
-- [API Reference](#api-reference)
-- [Examples](#examples)
+- [Overview](#-overview)
+- [Features](#-features)
+- [Requirements](#-requirements)
+- [Installation](#-installation)
+- [CLI Tool](#-cli-tool)
+- [Core Components](#-core-components)
+- [Concurrency Model](#-concurrency-model)
+- [API Reference](#-api-reference)
+- [Examples](#-examples)
 - [Advanced Peer Discovery Features](#-advanced-peer-discovery-features)
-- [Development](#development)
+- [Development](#-development)
 
 ## 🚀 Overview
 
 SwiftyBT is a comprehensive BitTorrent client library that provides:
 
-- **Full BitTorrent Protocol Support** - Complete implementation of the BitTorrent protocol
+- **BitTorrent Protocol Support** - Implementation of the BitTorrent protocol
+- **CLI Tool** - Command-line torrent downloader (`clt-swiftybt`)
 - **Concurrent Torrent Management** - Handle multiple torrents simultaneously
 - **Modern Swift Concurrency** - Built with async/await and SwiftNIO
 - **High Performance** - Non-blocking I/O with efficient resource utilization
-- **Cross-Platform** - Support for macOS and iOS
-
-The library is designed with performance and scalability in mind, utilizing modern Swift concurrency patterns and the SwiftNIO framework for high-throughput network operations.
+- **Cross-Platform** - Support for macOS and Linux
 
 ## ✨ Features
 
@@ -35,13 +35,6 @@ The library is designed with performance and scalability in mind, utilizing mode
 - **Peer Wire Protocol** - Full BitTorrent peer communication
 - **Bencode Encoding/Decoding** - BitTorrent's bencode format support
 - **Piece Management** - Efficient piece requesting and validation
-
-### 🚀 Advanced Features
-- **Concurrent Torrent Sessions** - Manage multiple torrents simultaneously
-- **Asynchronous Operations** - Non-blocking I/O with async/await
-- **Event Loop Architecture** - High-performance network handling
-- **Comprehensive Logging** - Detailed logging with Swift Log
-- **Error Handling** - Robust error handling and recovery
 
 ### 🌐 Peer Discovery Features
 - **DHT (Distributed Hash Table)** - Decentralized peer discovery without trackers
@@ -53,6 +46,12 @@ The library is designed with performance and scalability in mind, utilizing mode
 - **Peer Management** - Dynamic peer connection handling
 - **Session Control** - Start, stop, and pause torrent sessions
 - **Status Monitoring** - Comprehensive torrent status information
+
+### 🛠️ CLI Tool
+- **Command-line Interface** - Download torrents from the command line
+- **Progress Monitoring** - Real-time progress bars and statistics
+- **Multiple Torrents** - Download multiple torrents simultaneously
+- **Automatic Organization** - Downloads organized in `torrent_downloads` folder
 
 ## 📋 Requirements
 
@@ -83,6 +82,41 @@ Or add it to your Xcode project:
 2. Enter the repository URL
 3. Select the version and add to your target
 
+### CLI Tool Installation
+
+The CLI tool is included in the package and can be built with:
+
+```bash
+swift build -c release --product clt-swiftybt
+```
+
+## 🛠️ CLI Tool
+
+SwiftyBT includes a command-line tool for downloading torrents:
+
+### Usage
+
+```bash
+# Download a single torrent
+./clt-swiftybt file.torrent
+
+# Download multiple torrents
+./clt-swiftybt file1.torrent file2.torrent file3.torrent
+
+# Download with progress monitoring
+./clt-swiftybt file.torrent
+# Output: Progress bars, speed, peers, etc.
+```
+
+### Features
+
+- **Simple Interface** - Just pass torrent files as arguments
+- **Progress Monitoring** - Real-time progress bars and statistics
+- **Multiple Downloads** - Download multiple torrents simultaneously
+- **Automatic Organization** - Downloads saved to `torrent_downloads` folder
+- **Error Handling** - Graceful handling of failed downloads
+
+
 ## 🏗️ Core Components
 
 ```
@@ -91,11 +125,13 @@ SwiftyBT/
 ├── TorrentSession     # Individual torrent session management
 ├── TorrentFile        # Torrent file parsing and validation
 ├── PeerWire           # BitTorrent peer wire protocol
-├── Tracker            # Tracker communication (HTTP/HTTPS)
+├── TrackerClient      # Tracker communication (HTTP/HTTPS)
 ├── Bencode            # Bencode encoding/decoding
 ├── DHT                # Distributed Hash Table for peer discovery
 ├── PEX                # Peer Exchange for peer list sharing
-└── ExtendedTracker    # Extended tracker support with multiple trackers
+├── ExtendedTracker    # Extended tracker support with multiple trackers
+├── UDPTrackersProvider # UDP tracker providers
+└── CLTSwiftyBT        # Command-line interface tool
 ```
 
 ### Component Responsibilities
@@ -106,11 +142,13 @@ SwiftyBT/
 | **TorrentSession** | Handles individual torrent lifecycle and peer management |
 | **TorrentFile** | Parses .torrent files, validates metadata |
 | **PeerWire** | Implements BitTorrent peer wire protocol |
-| **Tracker** | Handles tracker announce/scrape operations |
+| **TrackerClient** | Handles tracker announce/scrape operations |
 | **Bencode** | Encodes/decodes BitTorrent bencode format |
 | **DHT** | Decentralized peer discovery using distributed hash table |
 | **PEX** | Peer-to-peer exchange of peer lists |
 | **ExtendedTracker** | Multiple tracker support with redundancy |
+| **UDPTrackersProvider** | Provides reliable UDP tracker lists |
+| **CLTSwiftyBT** | Command-line interface for torrent downloads |
 
 ## 🔄 Concurrency Model
 
@@ -203,8 +241,12 @@ The main entry point for managing multiple torrents.
 
 ```swift
 public class TorrentClient {
-    // Initialize with custom event loop group
-    public init(eventLoopGroup: EventLoopGroup? = nil)
+    // Initialize with custom event loop group and features
+    public init(
+        eventLoopGroup: EventLoopGroup? = nil,
+        enableDHT: Bool = false,
+        enablePEX: Bool = false
+    )
     
     // Load torrent from file
     public func loadTorrent(from url: URL) throws -> TorrentSession
@@ -288,7 +330,13 @@ public class PeerConnection {
     public func sendCancel(pieceIndex: UInt32, offset: UInt32, length: UInt32) async throws
     public func sendPort(port: UInt16) async throws
     public func close() async throws
+    
+    // Get peer state
+    public func getPeerBitfield() async -> [Bool]?
+    public func isPeerChoked() async -> Bool
+    public func isPeerInterested() async -> Bool
 }
+```
 
 ### DHT (Distributed Hash Table)
 
@@ -412,15 +460,9 @@ public struct ExtendedScrapeResponse {
     public let successfulTrackers: Int
     public let failedTrackers: Int
 }
-    
-    // Get peer state
-    public func getPeerBitfield() async -> [Bool]?
-    public func isPeerChoked() async -> Bool
-    public func isPeerInterested() async -> Bool
-}
 ```
 
-### Tracker
+### TrackerClient
 
 Tracker communication for peer discovery.
 
@@ -469,6 +511,26 @@ public enum BencodeValue {
 }
 ```
 
+### UDPTrackersProvider
+
+Provides reliable UDP tracker lists.
+
+```swift
+public class UDPTrackersProvider {
+    // Get all available UDP trackers
+    public static func getAllUDPTrackers() -> [String]
+    
+    // Get primary UDP trackers (most reliable)
+    public static func getPrimaryUDPTrackers() -> [String]
+    
+    // Get backup UDP trackers (secondary reliable)
+    public static func getBackupUDPTrackers() -> [String]
+    
+    // Get extended UDP trackers (additional options)
+    public static func getExtendedUDPTrackers() -> [String]
+}
+```
+
 ## 💡 Examples
 
 ### Basic Torrent Download
@@ -480,7 +542,7 @@ import Logging
 // Configure logging
 LoggingSystem.bootstrap { label in
     var handler = StreamLogHandler.standardOutput(label: label)
-    handler.logLevel = .info
+    handler.logLevel = .info // Increase logging level
     return handler
 }
 
@@ -851,9 +913,28 @@ struct AdvancedExample {
 }
 ```
 
+### CLI Tool Example
+
+```bash
+# Build the CLI tool
+swift build -c release --product clt-swiftybt
+
+# Download a single torrent
+./build/release/clt-swiftybt file.torrent
+
+# Download multiple torrents
+./build/release/clt-swiftybt file1.torrent file2.torrent file3.torrent
+
+# The tool will:
+# - Create a torrent_downloads directory
+# - Download all torrents with progress bars
+# - Show real-time statistics
+# - Handle errors gracefully
+```
+
 ## 🌟 Advanced Peer Discovery Features
 
-SwiftyBT now includes three major peer discovery enhancements that significantly improve BitTorrent performance and reliability.
+SwiftyBT includes three major peer discovery enhancements that significantly improve BitTorrent performance and reliability.
 
 ### DHT (Distributed Hash Table)
 
@@ -983,6 +1064,9 @@ swift test --filter TorrentClientTests
 
 # Build for release
 swift build -c release
+
+# Build CLI tool
+swift build -c release --product clt-swiftybt
 ```
 
 ### Error Handling
@@ -1008,9 +1092,38 @@ public enum TrackerError: Error {
     case invalidURL
     case networkError
     case invalidResponse
+    case httpError(statusCode: Int, responseBody: String)
+    case trackerFailure(reason: String, responseDetails: String)
+    case missingInterval
 }
+```
+
+### Project Structure
+
+```
+SwiftyBT/
+├── Sources/
+│   ├── swiftybt/           # Main library source
+│   │   ├── TorrentClient.swift
+│   │   ├── TorrentSession.swift
+│   │   ├── TorrentFile.swift
+│   │   ├── PeerWire.swift
+│   │   ├── TrackerClient.swift
+│   │   ├── Bencode.swift
+│   │   ├── DHT.swift
+│   │   ├── PEX.swift
+│   │   ├── ExtendedTracker.swift
+│   │   ├── UDPTrackersProvider.swift
+│   │   └── ...
+│   ├── CLTSwiftyBT/        # CLI tool
+│   └── TestTorrent/        # Test utilities
+├── Examples/               # Example applications
+├── Tests/                  # Unit tests
+├── torrent_downloads/      # CLI downloads directory
+└── test_torrents/         # Test torrent files
 ```
 
 ---
 
-For quick start and basic usage, see [README.md](README.md). 
+For quick start and basic usage, see [README.md](README.md).
+
