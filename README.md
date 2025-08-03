@@ -64,8 +64,6 @@ A simple command-line torrent downloader is available in the [clt-swiftybt](clt-
 - Progress bar and real-time stats for each torrent
 - Downloads to `torrent_downloads` folder in the current directory
 
-**See [clt-swiftybt/README.md](clt-swiftybt/README.md) for usage and installation.**
-
 ---
 
 ### Advanced Features
