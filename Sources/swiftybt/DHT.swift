@@ -133,16 +133,19 @@ public class DHTClient {
                 group.addTask {
                     do {
                         let components = nodeAddress.split(separator: ":")
-                        guard components.count == 2,
-                              let host = components.first,
-                              let portString = components.last,
-                              let port = UInt16(portString) else {
+                        guard components.count == 2 else {
+                            return
+                        }
+                        
+                        let host = String(components.first ?? "")
+                        let portString = String(components.last ?? "")
+                        guard let port = UInt16(portString) else {
                             return
                         }
                         
                         let node = DHTNode(
                             id: Data((0..<20).map { _ in UInt8.random(in: 0...255) }),
-                            address: String(host),
+                            address: host,
                             port: port
                         )
                         
@@ -294,7 +297,7 @@ public class DHTClient {
     }
     
     /// Send ping to a DHT node
-    private func ping(node: DHTNode) async throws {
+    public func ping(node: DHTNode) async throws {
         let query: [String: Any] = [
             "t": "pn",
             "y": "q",
@@ -418,7 +421,9 @@ public class DHTClient {
         
         // Also add to simple routing table for backward compatibility
         let key = "\(node.address):\(node.port)"
-        routingTable[key] = node
+        DispatchQueue.main.sync {
+            routingTable[key] = node
+        }
     }
     
     /// Calculate XOR distance between two node IDs

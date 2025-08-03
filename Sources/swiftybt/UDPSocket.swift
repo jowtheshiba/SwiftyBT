@@ -101,12 +101,9 @@ public class UDPSocket {
         var fromAddr = sockaddr_in()
         var fromAddrLen = socklen_t(MemoryLayout<sockaddr_in>.size)
         
+        // Use a simpler approach without complex pointer manipulation
         let receiveResult = buffer.withUnsafeMutableBytes { buffer in
-            withUnsafeMutablePointer(to: &fromAddr) { addrPtr in
-                addrPtr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockAddrPtr in
-                    Darwin.recvfrom(socket, buffer.baseAddress, buffer.count, 0, sockAddrPtr, &fromAddrLen)
-                }
-            }
+            Darwin.recvfrom(socket, buffer.baseAddress, buffer.count, 0, nil, nil)
         }
         
         if receiveResult == -1 {

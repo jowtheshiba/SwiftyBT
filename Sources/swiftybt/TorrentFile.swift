@@ -73,67 +73,93 @@ public struct TorrentFile {
     /// - Returns: Parsed torrent file
     /// - Throws: TorrentFileError if parsing fails
     public static func parse(_ data: Data) throws -> TorrentFile {
+        print("DEBUG: Starting to parse torrent file, data size: \(data.count)")
+        
         let bencodeValue = try Bencode.parse(data)
+        print("DEBUG: Successfully parsed bencode")
         
         guard case .dictionary(let dict) = bencodeValue else {
+            print("DEBUG: Root value is not a dictionary")
             throw TorrentFileError.invalidFormat
         }
         
+        print("DEBUG: Root is dictionary with \(dict.count) keys")
+        print("DEBUG: Keys: \(dict.keys)")
+        
         guard let infoDict = dict["info"],
               case .dictionary(let infoData) = infoDict else {
+            print("DEBUG: Missing or invalid info dictionary")
             throw TorrentFileError.missingInfo
         }
         
+        print("DEBUG: Info dictionary has \(infoData.count) keys")
+        print("DEBUG: Info keys: \(infoData.keys)")
+        
         let info = try parseInfo(infoData)
+        print("DEBUG: Successfully parsed info")
         
         let announce: String?
         if let value = dict["announce"], case .string(let str) = value {
             announce = str
+            print("DEBUG: Found announce: \(str)")
         } else {
             announce = nil
+            print("DEBUG: No announce found")
         }
         
         let announceList: [[String]]?
         if let value = dict["announce-list"], case .list(let list) = value {
             announceList = list.compactMap { item in
                 guard case .list(let tier) = item else { return nil }
-                return tier.compactMap { tierItem in
+                let tierStrings = tier.compactMap { tierItem -> String? in
                     guard case .string(let str) = tierItem else { return nil }
                     return str
                 }
+                return tierStrings.isEmpty ? nil : tierStrings
             }
+            print("DEBUG: Found announce-list with \(announceList?.count ?? 0) tiers")
         } else {
             announceList = nil
+            print("DEBUG: No announce-list found")
         }
         
         let creationDate: Date?
         if let value = dict["creation date"], case .integer(let timestamp) = value {
             creationDate = Date(timeIntervalSince1970: TimeInterval(timestamp))
+            print("DEBUG: Found creation date: \(timestamp)")
         } else {
             creationDate = nil
+            print("DEBUG: No creation date found")
         }
         
         let comment: String?
         if let value = dict["comment"], case .string(let str) = value {
             comment = str
+            print("DEBUG: Found comment: \(str)")
         } else {
             comment = nil
+            print("DEBUG: No comment found")
         }
         
         let createdBy: String?
         if let value = dict["created by"], case .string(let str) = value {
             createdBy = str
+            print("DEBUG: Found created by: \(str)")
         } else {
             createdBy = nil
+            print("DEBUG: No created by found")
         }
         
         let encoding: String?
         if let value = dict["encoding"], case .string(let str) = value {
             encoding = str
+            print("DEBUG: Found encoding: \(str)")
         } else {
             encoding = nil
+            print("DEBUG: No encoding found")
         }
         
+        print("DEBUG: Creating TorrentFile object")
         return TorrentFile(
             info: info,
             rawInfoNode: infoDict,
@@ -210,46 +236,66 @@ public struct TorrentFile {
     }
     
     private static func parseInfo(_ dict: [String: Bencode.Value]) throws -> Info {
+        print("DEBUG: parseInfo called with \(dict.count) keys")
+        print("DEBUG: Info keys: \(dict.keys)")
+        
         guard let pieceLengthValue = dict["piece length"],
               case .integer(let pieceLength) = pieceLengthValue else {
+            print("DEBUG: Missing or invalid piece length")
             throw TorrentFileError.missingPieceLength
         }
         
+        print("DEBUG: Piece length: \(pieceLength)")
+        
         guard let piecesValue = dict["pieces"] else {
+            print("DEBUG: Missing pieces")
             throw TorrentFileError.missingPieces
         }
+        
+        print("DEBUG: Pieces value type: \(piecesValue)")
         
         // Pieces data is raw bytes in bencode
         let pieces: [Data]
         switch piecesValue {
         case .string(let piecesString):
+            print("DEBUG: Pieces is string, length: \(piecesString.count)")
             // Legacy case - convert UTF-8 string to bytes
             pieces = stride(from: 0, to: piecesString.count, by: 20).map {
                 Data(piecesString.utf8.dropFirst($0).prefix(20))
             }
         case .binary(let piecesData):
+            print("DEBUG: Pieces is binary, length: \(piecesData.count)")
             // Binary data - split into 20-byte pieces
             pieces = stride(from: 0, to: piecesData.count, by: 20).map {
                 Data(piecesData.dropFirst($0).prefix(20))
             }
         default:
+            print("DEBUG: Pieces is neither string nor binary")
             throw TorrentFileError.missingPieces
         }
         
+        print("DEBUG: Parsed \(pieces.count) pieces")
+        
         guard let nameValue = dict["name"],
               case .string(let name) = nameValue else {
+            print("DEBUG: Missing or invalid name")
             throw TorrentFileError.missingName
         }
+        
+        print("DEBUG: Name: \(name)")
         
         let length: Int?
         if let value = dict["length"], case .integer(let len) = value {
             length = Int(len)
+            print("DEBUG: Length: \(length!)")
         } else {
             length = nil
+            print("DEBUG: No length found")
         }
         
         let files: [File]?
         if let value = dict["files"], case .list(let fileList) = value {
+            print("DEBUG: Found files list with \(fileList.count) files")
             files = fileList.compactMap { fileValue -> File? in
                 guard case .dictionary(let fileDict) = fileValue else { return nil }
                 
@@ -268,15 +314,19 @@ public struct TorrentFile {
             }
         } else {
             files = nil
+            print("DEBUG: No files found")
         }
         
         let isPrivate: Bool?
         if let value = dict["private"], case .integer(let privateVal) = value {
             isPrivate = privateVal == 1
+            print("DEBUG: Private: \(isPrivate!)")
         } else {
             isPrivate = nil
+            print("DEBUG: No private flag found")
         }
         
+        print("DEBUG: Creating Info object")
         return Info(
             pieceLength: Int(pieceLength),
             pieces: pieces,

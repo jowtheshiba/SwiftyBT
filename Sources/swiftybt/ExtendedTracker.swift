@@ -70,10 +70,7 @@ public class ExtendedTrackerClient {
         let trackers = getAllTrackers(for: torrentFile)
         logger.info("Announcing to \(trackers.count) trackers")
         
-        var responses: [TrackerResponse] = []
-        var errors: [String: Error] = [:]
-        
-        await withTaskGroup(of: Void.self) { group in
+        let results = await withTaskGroup(of: (String, Result<TrackerResponse, Error>).self) { group in
             for tracker in trackers {
                 group.addTask {
                     do {
@@ -87,13 +84,30 @@ public class ExtendedTrackerClient {
                             left: left,
                             event: event
                         )
-                        responses.append(response)
+                        return (tracker, .success(response))
                     } catch {
-                        errors[tracker] = error
+                        return (tracker, .failure(error))
                     }
                 }
             }
+            
+            var responses: [TrackerResponse] = []
+            var errors: [String: Error] = [:]
+            
+            for await (tracker, result) in group {
+                switch result {
+                case .success(let response):
+                    responses.append(response)
+                case .failure(let error):
+                    errors[tracker] = error
+                }
+            }
+            
+            return (responses, errors)
         }
+        
+        let responses = results.0
+        let errors = results.1
         
         // Log results
         logger.info("Successfully announced to \(responses.count) trackers")
@@ -111,7 +125,7 @@ public class ExtendedTrackerClient {
             combinedPeers: combinedResponse.peers.map { "\($0.address):\($0.port)" },
             totalPeers: combinedResponse.peers.count,
             successfulTrackers: responses.count,
-            failedTrackers: errors.count
+            failedTrackers: errors.keys.count
         )
     }
     
@@ -128,10 +142,7 @@ public class ExtendedTrackerClient {
         let trackers = getAllTrackers(for: torrentFile)
         logger.info("Scraping \(trackers.count) trackers")
         
-        var responses: [ScrapeResponse] = []
-        var errors: [String: Error] = [:]
-        
-        await withTaskGroup(of: Void.self) { group in
+        let results = await withTaskGroup(of: (String, Result<ScrapeResponse, Error>).self) { group in
             for tracker in trackers {
                 group.addTask {
                     do {
@@ -139,13 +150,30 @@ public class ExtendedTrackerClient {
                             url: tracker,
                             infoHashes: infoHashes
                         )
-                        responses.append(response)
+                        return (tracker, .success(response))
                     } catch {
-                        errors[tracker] = error
+                        return (tracker, .failure(error))
                     }
                 }
             }
+            
+            var responses: [ScrapeResponse] = []
+            var errors: [String: Error] = [:]
+            
+            for await (tracker, result) in group {
+                switch result {
+                case .success(let response):
+                    responses.append(response)
+                case .failure(let error):
+                    errors[tracker] = error
+                }
+            }
+            
+            return (responses, errors)
         }
+        
+        let responses = results.0
+        let errors = results.1
         
         // Log results
         logger.info("Successfully scraped \(responses.count) trackers")
@@ -162,7 +190,7 @@ public class ExtendedTrackerClient {
             errors: errors,
             combinedStats: combinedResponse,
             successfulTrackers: responses.count,
-            failedTrackers: errors.count
+            failedTrackers: errors.keys.count
         )
     }
     

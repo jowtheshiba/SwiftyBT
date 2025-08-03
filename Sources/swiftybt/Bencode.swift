@@ -20,8 +20,14 @@ public struct Bencode {
     /// - Returns: Parsed bencode value
     /// - Throws: BencodeError if parsing fails
     public static func parse(_ data: Data) throws -> Value {
+        print("DEBUG: Bencode.parse called with \(data.count) bytes")
+        print("DEBUG: First 50 bytes: \(Array(data.prefix(50)))")
+        
         var scanner = BencodeScanner(data: data)
-        return try scanner.parse()
+        let result = try scanner.parse()
+        
+        print("DEBUG: Bencode.parse completed successfully")
+        return result
     }
     
     /// Parse bencode string
@@ -93,39 +99,53 @@ private struct BencodeScanner {
     
     mutating func parse() throws -> Bencode.Value {
         guard index < data.endIndex else {
+            print("DEBUG: Unexpected end at index \(index)")
             throw BencodeError.unexpectedEnd
         }
         
         let byte = data[index]
+        print("DEBUG: Parsing byte \(byte) (ASCII: \(Character(UnicodeScalar(byte)))) at index \(index)")
         
         switch byte {
         case ASCII.zero...ASCII.nine:
+            print("DEBUG: Parsing string")
             return try parseString()
         case ASCII.i:
+            print("DEBUG: Parsing integer")
             return try parseInteger()
         case ASCII.l:
+            print("DEBUG: Parsing list")
             return try parseList()
         case ASCII.d:
+            print("DEBUG: Parsing dictionary")
             return try parseDictionary()
         default:
+            print("DEBUG: Invalid format, byte: \(byte)")
             throw BencodeError.invalidFormat
         }
     }
     
     private mutating func parseString() throws -> Bencode.Value {
+        print("DEBUG: parseString called at index \(index)")
         let length = try parseLength()
+        print("DEBUG: String length: \(length)")
+        
         guard index + length <= data.endIndex else {
+            print("DEBUG: String would exceed data bounds")
             throw BencodeError.unexpectedEnd
         }
         
         let stringData = data[index..<(index + length)]
+        print("DEBUG: String data: \(Array(stringData))")
         
         // For bencode, we need to handle both text and binary data
         // We'll try UTF-8 first, but if it fails, we'll use the raw data
         if let string = String(data: stringData, encoding: .utf8) {
+            print("DEBUG: Parsed as UTF-8 string: \(string)")
             index += length
             return .string(string)
         } else {
+            print("DEBUG: Parsed as binary data")
             // For binary data, we need to preserve the original bytes
             index += length
             return .binary(stringData)
@@ -133,19 +153,26 @@ private struct BencodeScanner {
     }
     
     private mutating func parseLength() throws -> Int {
+        print("DEBUG: parseLength called at index \(index)")
         var length = 0
         while index < data.endIndex && data[index] != ASCII.colon {
+            print("DEBUG: Reading digit: \(data[index])")
             guard data[index] >= 48 && data[index] <= 57 else {
+                print("DEBUG: Invalid character in length: \(data[index])")
                 throw BencodeError.invalidString
             }
             length = length * 10 + Int(data[index] - ASCII.zero)
             index += 1
         }
         
+        print("DEBUG: Parsed length: \(length)")
+        
         guard index < data.endIndex && data[index] == ASCII.colon else {
+            print("DEBUG: Expected colon but got: \(data[index])")
             throw BencodeError.invalidString
         }
         
+        print("DEBUG: Found colon, advancing index")
         index += 1
         return length
     }
@@ -194,24 +221,33 @@ private struct BencodeScanner {
     }
     
     private mutating func parseDictionary() throws -> Bencode.Value {
+        print("DEBUG: parseDictionary called at index \(index)")
         index += 1 // Skip 'd'
         var dict: [String: Bencode.Value] = [:]
         
         while index < data.endIndex && data[index] != ASCII.e {
+            print("DEBUG: Parsing dictionary key at index \(index)")
             let keyValue = try parse()
             guard case .string(let key) = keyValue else {
+                print("DEBUG: Dictionary key is not a string")
                 throw BencodeError.invalidDictionary
             }
             
+            print("DEBUG: Dictionary key: \(key)")
+            print("DEBUG: Parsing dictionary value at index \(index)")
             let value = try parse()
+            print("DEBUG: Dictionary value: \(value)")
             dict[key] = value
         }
         
+        print("DEBUG: Dictionary parsing complete, found 'e' at index \(index)")
         guard index < data.endIndex && data[index] == ASCII.e else {
+            print("DEBUG: Expected 'e' but got: \(data[index])")
             throw BencodeError.invalidDictionary
         }
         
         index += 1
+        print("DEBUG: Dictionary parsing finished, returning \(dict.count) items")
         return .dictionary(dict)
     }
 }
