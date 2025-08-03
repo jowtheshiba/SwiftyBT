@@ -18,9 +18,7 @@ let package = Package(
         .executable(
             name: "clt-swiftybt",
             targets: ["CLTSwiftyBT"]),
-        .executable(
-            name: "TrackerTest",
-            targets: ["TrackerTest"]),
+
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-crypto.git", from: "2.0.0"),
@@ -48,10 +46,7 @@ let package = Package(
             name: "CLTSwiftyBT",
             dependencies: ["SwiftyBT"],
             path: "Sources/CLTSwiftyBT"),
-        .executableTarget(
-            name: "TrackerTest",
-            dependencies: ["SwiftyBT"],
-            path: "Sources/TrackerTest"),
+
         .testTarget(
             name: "SwiftyBTTests",
             dependencies: ["SwiftyBT"],

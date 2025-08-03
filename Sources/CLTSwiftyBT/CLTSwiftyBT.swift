@@ -8,7 +8,7 @@ struct CLTSwiftyBT {
         // Configure logging
         LoggingSystem.bootstrap { label in
             var handler = StreamLogHandler.standardOutput(label: label)
-            handler.logLevel = .warning // Reduce log noise
+            handler.logLevel = .info // Увеличиваем уровень логирования
             return handler
         }
         print("🌊 SwiftyBT CLI Tool v1.0")
@@ -55,6 +55,7 @@ struct CLTSwiftyBT {
                 print("✅ Loaded: \(session.torrentFile.info.name)")
                 print("   Size: \(formatBytes(session.torrentFile.getTotalSize()))")
                 print("   Pieces: \(session.torrentFile.info.pieces.count)")
+                print("   Trackers: \(session.torrentFile.getAllTrackers().count)")
                 print()
                 
             } catch {
@@ -103,22 +104,40 @@ struct CLTSwiftyBT {
         let downloadPath = downloadsDir.appendingPathComponent(torrentName)
         
         print("📥 Starting: \(torrentName)")
+        print("   📁 Download path: \(downloadPath.path)")
+        print("   🔗 Trackers: \(session.torrentFile.getAllTrackers().joined(separator: ", "))")
+        print()
         
         do {
             // Start the torrent
             try await session.start(downloadPath: downloadPath.path)
             
-            // Monitor progress
+            // Monitor progress with more detailed logging
+            var lastProgress = -1
+            var lastPeerCount = -1
+            var lastDownloadSpeed = Int64(0)
+            
             while session.getStatus().isRunning {
                 let status = session.getStatus()
-                displayProgress(torrentName, status: status)
                 
-                try await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
+                // Only update if something changed
+                let progress = Int(status.progress * 100)
+                let peerCount = status.peerCount
+                let downloadSpeed = status.downloadSpeed
+                
+                if progress != lastProgress || peerCount != lastPeerCount || downloadSpeed != lastDownloadSpeed {
+                    displayDetailedProgress(torrentName, status: status)
+                    lastProgress = progress
+                    lastPeerCount = peerCount
+                    lastDownloadSpeed = downloadSpeed
+                }
+                
+                try await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
             }
             
             // Final status
             let finalStatus = session.getStatus()
-            displayProgress(torrentName, status: finalStatus)
+            displayDetailedProgress(torrentName, status: finalStatus)
             print() // Add newline after final progress
             
             if finalStatus.progress >= 1.0 {
@@ -132,16 +151,29 @@ struct CLTSwiftyBT {
         }
     }
     
-    private static var lastProgress = -1
-    
-    private static func displayProgress(_ name: String, status: TorrentStatus) {
+    private static func displayDetailedProgress(_ name: String, status: TorrentStatus) {
         let progress = Int(status.progress * 100)
+        let speedStr = formatSpeed(status.downloadSpeed)
+        let peerStr = status.peerCount > 0 ? "\(status.peerCount) peers" : "no peers"
         
-        // Only update if progress changed
-        if progress != lastProgress {
-            print("\(name) -> \(progress)%")
-            lastProgress = progress
+        print("\(name) -> \(progress)% | \(speedStr) | \(peerStr) | \(formatBytes(status.downloadedBytes))/\(formatBytes(status.totalSize))")
+    }
+    
+    private static func formatSpeed(_ bytesPerSecond: Int64) -> String {
+        if bytesPerSecond == 0 {
+            return "0 B/s"
         }
+        
+        let units = ["B/s", "KB/s", "MB/s", "GB/s"]
+        var speed = Double(bytesPerSecond)
+        var unitIndex = 0
+        
+        while speed >= 1024.0 && unitIndex < units.count - 1 {
+            speed /= 1024.0
+            unitIndex += 1
+        }
+        
+        return String(format: "%.1f %@", speed, units[unitIndex])
     }
     
     private static func createProgressBar(_ percentage: Int) -> String {
