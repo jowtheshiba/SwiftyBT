@@ -103,17 +103,258 @@ public class TrackerClient {
     private func performUDPRequest(url: URL) async throws -> TrackerResponse {
         logger.info("🔗 Using UDP for tracker: \(url)")
         
-        // For now, return empty response for UDP trackers
-        // In a real implementation, you'd implement UDP protocol
-        logger.warning("⚠️ UDP tracker support not implemented yet")
+        guard let host = url.host,
+              let port = url.port ?? 80 else {
+            throw TrackerError.invalidURL
+        }
+        
+        // Create UDP connection
+        let endpoint = NWEndpoint.hostPort(
+            host: NWEndpoint.Host(host),
+            port: NWEndpoint.Port(integerLiteral: UInt16(port))
+        )
+        
+        let connection = NWConnection(to: endpoint, using: .udp)
+        
+        return try await withCheckedThrowingContinuation { continuation in
+            connection.stateUpdateHandler = { [weak self] state in
+                switch state {
+                case .ready:
+                    Task {
+                        do {
+                            let response = try await self?.performUDPAnnounce(
+                                connection: connection, 
+                                url: url,
+                                infoHash: infoHash,
+                                peerId: peerId,
+                                port: port,
+                                uploaded: uploaded,
+                                downloaded: downloaded,
+                                left: left,
+                                event: event
+                            )
+                            continuation.resume(returning: response)
+                        } catch {
+                            continuation.resume(throwing: error)
+                        }
+                    }
+                case .failed(let error):
+                    continuation.resume(throwing: TrackerError.httpError(statusCode: 0, responseBody: error.localizedDescription))
+                case .cancelled:
+                    continuation.resume(throwing: TrackerError.httpError(statusCode: 0, responseBody: "Connection cancelled"))
+                default:
+                    break
+                }
+            }
+            
+            connection.start(queue: DispatchQueue.global(qos: .utility))
+        }
+    }
+    
+    private func performUDPAnnounce(
+        connection: NWConnection, 
+        url: URL,
+        infoHash: Data,
+        peerId: Data,
+        port: UInt16,
+        uploaded: Int64,
+        downloaded: Int64,
+        left: Int64,
+        event: AnnounceEvent
+    ) async throws -> TrackerResponse {
+        // UDP tracker protocol implementation
+        // 1. Connect request
+        let connectRequest = createUDPConnectRequest()
+        try await sendUDPRequest(connection: connection, data: connectRequest)
+        
+        let connectResponse = try await receiveUDPResponse(connection: connection)
+        let connectionId = try parseUDPConnectResponse(connectResponse)
+        
+        // 2. Announce request
+        let announceRequest = createUDPAnnounceRequest(
+            connectionId: connectionId,
+            infoHash: infoHash,
+            peerId: peerId,
+            port: port,
+            uploaded: uploaded,
+            downloaded: downloaded,
+            left: left,
+            event: event
+        )
+        
+        try await sendUDPRequest(connection: connection, data: announceRequest)
+        
+        let announceResponse = try await receiveUDPResponse(connection: connection)
+        return try parseUDPAnnounceResponse(announceResponse)
+    }
+    
+    private func createUDPConnectRequest() -> Data {
+        var request = Data()
+        
+        // Protocol ID (0x41727101980)
+        request.append(contentsOf: [0x00, 0x00, 0x04, 0x17, 0x27, 0x10, 0x19, 0x80])
+        
+        // Action (0 = connect)
+        request.append(contentsOf: [0x00, 0x00, 0x00, 0x00])
+        
+        // Transaction ID (random)
+        let transactionId = UInt32.random(in: 0...UInt32.max)
+        request.append(contentsOf: withUnsafeBytes(of: transactionId.bigEndian) { Data($0) })
+        
+        return request
+    }
+    
+    private func createUDPAnnounceRequest(
+        connectionId: UInt64,
+        infoHash: Data,
+        peerId: Data,
+        port: UInt16,
+        uploaded: Int64,
+        downloaded: Int64,
+        left: Int64,
+        event: AnnounceEvent
+    ) -> Data {
+        var request = Data()
+        
+        // Connection ID
+        request.append(contentsOf: withUnsafeBytes(of: connectionId.bigEndian) { Data($0) })
+        
+        // Action (1 = announce)
+        request.append(contentsOf: [0x00, 0x00, 0x00, 0x01])
+        
+        // Transaction ID (random)
+        let transactionId = UInt32.random(in: 0...UInt32.max)
+        request.append(contentsOf: withUnsafeBytes(of: transactionId.bigEndian) { Data($0) })
+        
+        // Info hash
+        request.append(infoHash)
+        
+        // Peer ID
+        request.append(peerId)
+        
+        // Downloaded
+        request.append(contentsOf: withUnsafeBytes(of: downloaded.bigEndian) { Data($0) })
+        
+        // Left
+        request.append(contentsOf: withUnsafeBytes(of: left.bigEndian) { Data($0) })
+        
+        // Uploaded
+        request.append(contentsOf: withUnsafeBytes(of: uploaded.bigEndian) { Data($0) })
+        
+        // Event
+        let eventValue: UInt32
+        switch event {
+        case .started: eventValue = 0
+        case .stopped: eventValue = 1
+        case .completed: eventValue = 2
+        case .empty: eventValue = 3
+        }
+        request.append(contentsOf: withUnsafeBytes(of: eventValue.bigEndian) { Data($0) })
+        
+        // IP address (0 = use sender's IP)
+        request.append(contentsOf: [0x00, 0x00, 0x00, 0x00])
+        
+        // Key (random)
+        let key = UInt32.random(in: 0...UInt32.max)
+        request.append(contentsOf: withUnsafeBytes(of: key.bigEndian) { Data($0) })
+        
+        // Num want (-1 = default)
+        request.append(contentsOf: [0xFF, 0xFF, 0xFF, 0xFF])
+        
+        // Port
+        request.append(contentsOf: withUnsafeBytes(of: port.bigEndian) { Data($0) })
+        
+        return request
+    }
+    
+    private func sendUDPRequest(connection: NWConnection, data: Data) async throws {
+        return try await withCheckedThrowingContinuation { continuation in
+            connection.send(content: data, completion: .contentProcessed { error in
+                if let error = error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume()
+                }
+            })
+        }
+    }
+    
+    private func receiveUDPResponse(connection: NWConnection) async throws -> Data {
+        return try await withCheckedThrowingContinuation { continuation in
+            connection.receiveMessage { data, context, isComplete, error in
+                if let error = error {
+                    continuation.resume(throwing: error)
+                } else if let data = data {
+                    continuation.resume(returning: data)
+                } else {
+                    continuation.resume(throwing: TrackerError.invalidResponse)
+                }
+            }
+        }
+    }
+    
+    private func parseUDPConnectResponse(_ data: Data) throws -> UInt64 {
+        guard data.count >= 16 else {
+            throw TrackerError.invalidResponse
+        }
+        
+        // Parse action (should be 0)
+        let action = data[0..<4].withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
+        guard action == 0 else {
+            throw TrackerError.invalidResponse
+        }
+        
+        // Parse connection ID
+        let connectionId = data[4..<12].withUnsafeBytes { $0.load(as: UInt64.self).bigEndian }
+        
+        return connectionId
+    }
+    
+    private func parseUDPAnnounceResponse(_ data: Data) throws -> TrackerResponse {
+        guard data.count >= 20 else {
+            throw TrackerError.invalidResponse
+        }
+        
+        // Parse action (should be 1)
+        let action = data[0..<4].withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
+        guard action == 1 else {
+            throw TrackerError.invalidResponse
+        }
+        
+        // Parse interval
+        let interval = data[8..<12].withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
+        
+        // Parse leechers
+        let leechers = data[12..<16].withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
+        
+        // Parse seeders
+        let seeders = data[16..<20].withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
+        
+        // Parse peers (6 bytes each: 4 bytes IP + 2 bytes port)
+        var peers: [Peer] = []
+        let peerData = data.dropFirst(20)
+        
+        for i in stride(from: 0, to: peerData.count, by: 6) {
+            guard i + 6 <= peerData.count else { break }
+            
+            let peerBytes = Array(peerData[i..<i+6])
+            
+            // Extract IP address
+            let ip = peerBytes[0..<4].map { String($0) }.joined(separator: ".")
+            
+            // Extract port (big endian)
+            let port = UInt16(peerBytes[4]) << 8 | UInt16(peerBytes[5])
+            
+            peers.append(Peer(address: ip, port: port))
+        }
         
         return TrackerResponse(
-            interval: 1800,
+            interval: Int(interval),
             minInterval: nil,
-            complete: nil,
-            incomplete: nil,
-            peers: [],
-            warning: "UDP not supported"
+            complete: Int(seeders),
+            incomplete: Int(leechers),
+            peers: peers,
+            warning: nil
         )
     }
     
