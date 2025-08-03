@@ -49,6 +49,7 @@ public struct TorrentFile {
     }
     
     public let info: Info
+    public let rawInfoNode: Bencode.Value
     public let announce: String?
     public let announceList: [[String]]?
     public let creationDate: Date?
@@ -56,8 +57,9 @@ public struct TorrentFile {
     public let createdBy: String?
     public let encoding: String?
     
-    public init(info: Info, announce: String? = nil, announceList: [[String]]? = nil, creationDate: Date? = nil, comment: String? = nil, createdBy: String? = nil, encoding: String? = nil) {
+    public init(info: Info, rawInfoNode: Bencode.Value, announce: String? = nil, announceList: [[String]]? = nil, creationDate: Date? = nil, comment: String? = nil, createdBy: String? = nil, encoding: String? = nil) {
         self.info = info
+        self.rawInfoNode = rawInfoNode
         self.announce = announce
         self.announceList = announceList
         self.creationDate = creationDate
@@ -134,6 +136,7 @@ public struct TorrentFile {
         
         return TorrentFile(
             info: info,
+            rawInfoNode: infoDict,
             announce: announce,
             announceList: announceList,
             creationDate: creationDate,
@@ -156,7 +159,16 @@ public struct TorrentFile {
     /// - Returns: Info hash as data
     /// - Throws: TorrentFileError if encoding fails
     public func getInfoHash() throws -> Data {
-        let infoData = Bencode.encode(.dictionary(info.toDictionary()))
+        let infoData = Bencode.encode(rawInfoNode)
+        return Data(Insecure.SHA1.hash(data: infoData))
+    }
+    
+    /// Get info hash from original bencode info node
+    /// - Parameter rawInfoNode: Original bencode info node
+    /// - Returns: Info hash as data
+    /// - Throws: TorrentFileError if encoding fails
+    public func getInfoHash(rawInfoNode: Bencode.Value) throws -> Data {
+        let infoData = Bencode.encode(rawInfoNode)
         return Data(Insecure.SHA1.hash(data: infoData))
     }
     
@@ -203,13 +215,25 @@ public struct TorrentFile {
             throw TorrentFileError.missingPieceLength
         }
         
-        guard let piecesValue = dict["pieces"],
-              case .string(let piecesString) = piecesValue else {
+        guard let piecesValue = dict["pieces"] else {
             throw TorrentFileError.missingPieces
         }
         
-        let pieces = stride(from: 0, to: piecesString.count, by: 20).map {
-            Data(piecesString.utf8.dropFirst($0).prefix(20))
+        // Pieces data is raw bytes in bencode
+        let pieces: [Data]
+        switch piecesValue {
+        case .string(let piecesString):
+            // Legacy case - convert UTF-8 string to bytes
+            pieces = stride(from: 0, to: piecesString.count, by: 20).map {
+                Data(piecesString.utf8.dropFirst($0).prefix(20))
+            }
+        case .binary(let piecesData):
+            // Binary data - split into 20-byte pieces
+            pieces = stride(from: 0, to: piecesData.count, by: 20).map {
+                Data(piecesData.dropFirst($0).prefix(20))
+            }
+        default:
+            throw TorrentFileError.missingPieces
         }
         
         guard let nameValue = dict["name"],
@@ -283,7 +307,8 @@ private extension TorrentFile.Info {
         ]
         
         let piecesData = pieces.map { Data($0) }.reduce(Data(), +)
-        dict["pieces"] = .string(String(data: piecesData, encoding: .utf8) ?? "")
+        // Pieces should remain as raw bytes
+        dict["pieces"] = .binary(piecesData)
         
         if let length = length {
             dict["length"] = .integer(Int64(length))

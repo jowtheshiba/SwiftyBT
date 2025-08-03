@@ -9,6 +9,7 @@ public struct Bencode {
     /// Bencode value types
     public enum Value {
         case string(String)
+        case binary(Data)  // For binary data like pieces
         case integer(Int64)
         case list([Value])
         case dictionary([String: Value])
@@ -42,6 +43,11 @@ public struct Bencode {
         case .string(let string):
             let length = string.count
             return "\(length):\(string)".data(using: .utf8) ?? Data()
+        case .binary(let data):
+            let length = data.count
+            var result = "\(length):".data(using: .utf8) ?? Data()
+            result.append(data)
+            return result
         case .integer(let int):
             return "i\(int)e".data(using: .utf8) ?? Data()
         case .list(let list):
@@ -113,12 +119,17 @@ private struct BencodeScanner {
         }
         
         let stringData = data[index..<(index + length)]
-        guard let string = String(data: stringData, encoding: .utf8) else {
-            throw BencodeError.invalidString
-        }
         
-        index += length
-        return .string(string)
+        // For bencode, we need to handle both text and binary data
+        // We'll try UTF-8 first, but if it fails, we'll use the raw data
+        if let string = String(data: stringData, encoding: .utf8) {
+            index += length
+            return .string(string)
+        } else {
+            // For binary data, we need to preserve the original bytes
+            index += length
+            return .binary(stringData)
+        }
     }
     
     private mutating func parseLength() throws -> Int {

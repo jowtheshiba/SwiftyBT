@@ -14,6 +14,9 @@ struct CLTSwiftyBT {
         print("🌊 SwiftyBT CLI Tool v1.0")
         print("==========================")
         
+        // Debug info hash
+        debugInfoHash()
+        
         // Parse command line arguments
         let arguments = CommandLine.arguments.dropFirst()
         
@@ -106,20 +109,9 @@ struct CLTSwiftyBT {
             try await session.start(downloadPath: downloadPath.path)
             
             // Monitor progress
-            var lastProgress = 0.0
-            var lastUpdate = Date()
-            
             while session.getStatus().isRunning {
                 let status = session.getStatus()
-                let currentProgress = status.progress
-                
-                // Update progress every 2 seconds or when progress changes significantly
-                let now = Date()
-                if now.timeIntervalSince(lastUpdate) >= 2.0 || abs(currentProgress - lastProgress) >= 0.05 {
-                    displayProgress(torrentName, status: status)
-                    lastProgress = currentProgress
-                    lastUpdate = now
-                }
+                displayProgress(torrentName, status: status)
                 
                 try await Task.sleep(nanoseconds: 500_000_000) // 0.5 seconds
             }
@@ -127,6 +119,7 @@ struct CLTSwiftyBT {
             // Final status
             let finalStatus = session.getStatus()
             displayProgress(torrentName, status: finalStatus)
+            print() // Add newline after final progress
             
             if finalStatus.progress >= 1.0 {
                 print("✅ Completed: \(torrentName)")
@@ -139,20 +132,16 @@ struct CLTSwiftyBT {
         }
     }
     
+    private static var lastProgress = -1
+    
     private static func displayProgress(_ name: String, status: TorrentStatus) {
         let progress = Int(status.progress * 100)
-        let downloaded = formatBytes(status.downloadedBytes)
-        let total = formatBytes(Int64(status.totalSize))
-        let speed = formatBytes(status.downloadSpeed) + "/s"
-        let peers = status.peerCount
         
-        let progressBar = createProgressBar(progress)
-        
-        print("📥 \(name)")
-        print("   \(progressBar) \(progress)%")
-        print("   📊 \(downloaded) / \(total) (\(speed))")
-        print("   👥 Peers: \(peers)")
-        print()
+        // Only update if progress changed
+        if progress != lastProgress {
+            print("\(name) -> \(progress)%")
+            lastProgress = progress
+        }
     }
     
     private static func createProgressBar(_ percentage: Int) -> String {
