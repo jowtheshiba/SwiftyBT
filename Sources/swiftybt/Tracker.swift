@@ -45,29 +45,24 @@ public class TrackerClient {
         left: Int64,
         event: AnnounceEvent = .started
     ) async throws -> TrackerResponse {
-        guard let url = URL(string: url) else {
+        logger.info("Announcing to tracker: \(url)")
+        guard let baseURL = URL(string: url) else {
             throw TrackerError.invalidURL
         }
-        
-        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)!
-        var queryItems = components.queryItems ?? []
-        
-        // Add required parameters
-        queryItems.append(URLQueryItem(name: "info_hash", value: infoHash.base64EncodedString()))
-        queryItems.append(URLQueryItem(name: "peer_id", value: peerId.base64EncodedString()))
-        queryItems.append(URLQueryItem(name: "port", value: String(port)))
-        queryItems.append(URLQueryItem(name: "uploaded", value: String(uploaded)))
-        queryItems.append(URLQueryItem(name: "downloaded", value: String(downloaded)))
-        queryItems.append(URLQueryItem(name: "left", value: String(left)))
-        queryItems.append(URLQueryItem(name: "event", value: event.rawValue))
-        queryItems.append(URLQueryItem(name: "compact", value: "1"))
-        
-        components.queryItems = queryItems
-        
-        guard let finalURL = components.url else {
+        // BitTorrent spec: info_hash и peer_id должны быть вручную закодированы как raw bytes -> %XX
+        let infoHashEncoded = infoHash.map { String(format: "%%%02x", $0) }.joined()
+        let peerIdEncoded = peerId.map { String(format: "%%%02x", $0) }.joined()
+        var urlString = baseURL.absoluteString
+        urlString += baseURL.query != nil ? "&" : "?"
+        urlString += "info_hash=\(infoHashEncoded)&peer_id=\(peerIdEncoded)&port=\(port)&uploaded=\(uploaded)&downloaded=\(downloaded)&left=\(left)&event=\(event.rawValue)&compact=1"
+        logger.info("Final announce URL: \(urlString)")
+        logger.info("Info hash (hex): \(infoHash.map { String(format: "%02x", $0) }.joined())")
+        logger.info("Peer ID (hex): \(peerId.map { String(format: "%02x", $0) }.joined())")
+        logger.info("Info hash (encoded): \(infoHashEncoded)")
+        logger.info("Peer ID (encoded): \(peerIdEncoded)")
+        guard let finalURL = URL(string: urlString) else {
             throw TrackerError.invalidURL
         }
-        
         return try await performRequest(url: finalURL)
     }
     
