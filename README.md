@@ -38,8 +38,8 @@ dependencies: [
 ```swift
 import SwiftyBT
 
-// Create a torrent client
-let client = TorrentClient()
+// Create a torrent client with DHT and PEX enabled
+let client = TorrentClient(enableDHT: true, enablePEX: true)
 
 // Load a torrent file
 let session = try client.loadTorrent(from: torrentURL)
@@ -55,7 +55,7 @@ print("Progress: \(Int(status.progress * 100))%")
 ### Multiple Torrents
 
 ```swift
-let client = TorrentClient()
+let client = TorrentClient(enableDHT: true, enablePEX: true)
 
 // Load multiple torrents
 let session1 = try client.loadTorrent(from: url1)
@@ -68,9 +68,44 @@ try await withTaskGroup(of: Void.self) { group in
 }
 ```
 
+### Advanced Features
+
+#### DHT Peer Discovery
+```swift
+// DHT is automatically enabled and will find peers without trackers
+let client = TorrentClient(enableDHT: true)
+let session = try client.loadTorrent(from: torrentURL)
+
+// DHT will automatically discover peers in the distributed network
+try await session.start()
+```
+
+#### PEX Peer Exchange
+```swift
+// PEX enables peer-to-peer exchange of peer lists
+let client = TorrentClient(enablePEX: true)
+let session = try client.loadTorrent(from: torrentURL)
+
+// PEX will automatically exchange peer lists with connected peers
+try await session.start()
+```
+
+#### Extended Tracker Support
+```swift
+// Extended trackers provide additional public trackers for better coverage
+let client = TorrentClient()
+let session = try client.loadTorrent(from: torrentURL)
+
+// Will announce to both torrent trackers and public trackers
+try await session.start()
+```
+
 ## ✨ Features
 
 - **Full BitTorrent Protocol Support** - Complete implementation of the BitTorrent protocol
+- **DHT Support** - Distributed Hash Table for decentralized peer discovery
+- **PEX Support** - Peer Exchange for efficient peer list sharing
+- **Extended Tracker Support** - Multiple public trackers for better coverage
 - **Concurrent Torrent Management** - Handle multiple torrents simultaneously
 - **Modern Swift Concurrency** - Built with async/await and SwiftNIO
 - **High Performance** - Non-blocking I/O with efficient resource utilization

@@ -12,6 +12,7 @@ Documentation for SwiftyBT
 - [Concurrency Model](#concurrency-model)
 - [API Reference](#api-reference)
 - [Examples](#examples)
+- [Advanced Peer Discovery Features](#-advanced-peer-discovery-features)
 - [Development](#development)
 
 ## 🚀 Overview
@@ -41,6 +42,11 @@ The library is designed with performance and scalability in mind, utilizing mode
 - **Event Loop Architecture** - High-performance network handling
 - **Comprehensive Logging** - Detailed logging with Swift Log
 - **Error Handling** - Robust error handling and recovery
+
+### 🌐 Peer Discovery Features
+- **DHT (Distributed Hash Table)** - Decentralized peer discovery without trackers
+- **PEX (Peer Exchange)** - Peer-to-peer exchange of peer lists
+- **Extended Tracker Support** - Multiple public trackers for better coverage
 
 ### 📊 Monitoring & Control
 - **Real-time Statistics** - Download/upload speeds, progress tracking
@@ -86,7 +92,10 @@ SwiftyBT/
 ├── TorrentFile        # Torrent file parsing and validation
 ├── PeerWire           # BitTorrent peer wire protocol
 ├── Tracker            # Tracker communication (HTTP/HTTPS)
-└── Bencode            # Bencode encoding/decoding
+├── Bencode            # Bencode encoding/decoding
+├── DHT                # Distributed Hash Table for peer discovery
+├── PEX                # Peer Exchange for peer list sharing
+└── ExtendedTracker    # Extended tracker support with multiple trackers
 ```
 
 ### Component Responsibilities
@@ -99,6 +108,9 @@ SwiftyBT/
 | **PeerWire** | Implements BitTorrent peer wire protocol |
 | **Tracker** | Handles tracker announce/scrape operations |
 | **Bencode** | Encodes/decodes BitTorrent bencode format |
+| **DHT** | Decentralized peer discovery using distributed hash table |
+| **PEX** | Peer-to-peer exchange of peer lists |
+| **ExtendedTracker** | Multiple tracker support with redundancy |
 
 ## 🔄 Concurrency Model
 
@@ -276,6 +288,130 @@ public class PeerConnection {
     public func sendCancel(pieceIndex: UInt32, offset: UInt32, length: UInt32) async throws
     public func sendPort(port: UInt16) async throws
     public func close() async throws
+}
+
+### DHT (Distributed Hash Table)
+
+Decentralized peer discovery without trackers.
+
+```swift
+public class DHTClient {
+    // Initialize DHT client
+    public init(port: UInt16 = 6881)
+    
+    // Start DHT client
+    public func start() async throws
+    
+    // Stop DHT client
+    public func stop()
+    
+    // Find peers for a torrent
+    public func findPeers(for infoHash: Data) async throws -> [String]
+}
+
+public struct DHTNode {
+    public let id: Data
+    public let address: String
+    public let port: UInt16
+}
+
+public enum DHTError: Error {
+    case encodingFailed
+    case receiveFailed
+    case invalidNode
+    case timeout
+}
+```
+
+### PEX (Peer Exchange)
+
+Peer-to-peer exchange of peer lists.
+
+```swift
+public class PEXClient {
+    // Initialize PEX client
+    public init()
+    
+    // Create PEX message
+    public func createPEXMessage(peers: [String]) -> Data?
+    
+    // Parse PEX message
+    public func parsePEXMessage(_ data: Data) throws -> PEXMessage
+    
+    // Process PEX message
+    public func processPEXMessage(_ message: PEXMessage)
+    
+    // Add known peers
+    public func addKnownPeers(_ peers: [String])
+    
+    // Get known peers
+    public func getKnownPeers() -> [String]
+}
+
+public struct PEXMessage {
+    public let added: [String]
+    public let addedFlags: [UInt8]
+    public let dropped: [String]
+}
+
+public enum PEXError: Error {
+    case invalidMessageFormat
+    case invalidPeerFormat
+    case encodingFailed
+    case decodingFailed
+}
+```
+
+### Extended Tracker Support
+
+Multiple tracker support with redundancy.
+
+```swift
+public class ExtendedTrackerClient {
+    // Initialize with additional trackers
+    public init(additionalTrackers: [String] = [])
+    
+    // Get all available trackers
+    public func getAllTrackers(for torrentFile: TorrentFile) -> [String]
+    
+    // Announce to multiple trackers
+    public func announceToMultipleTrackers(
+        torrentFile: TorrentFile,
+        infoHash: Data,
+        peerId: Data,
+        port: UInt16,
+        uploaded: Int64 = 0,
+        downloaded: Int64 = 0,
+        left: Int64,
+        event: AnnounceEvent = .started
+    ) async throws -> ExtendedTrackerResponse
+    
+    // Scrape multiple trackers
+    public func scrapeMultipleTrackers(
+        torrentFile: TorrentFile,
+        infoHashes: [Data]
+    ) async throws -> ExtendedScrapeResponse
+    
+    // Test tracker connectivity
+    public func testTracker(_ tracker: String) async -> Bool
+}
+
+public struct ExtendedTrackerResponse {
+    public let responses: [TrackerResponse]
+    public let errors: [String: Error]
+    public let combinedPeers: [String]
+    public let totalPeers: Int
+    public let successfulTrackers: Int
+    public let failedTrackers: Int
+}
+
+public struct ExtendedScrapeResponse {
+    public let responses: [ScrapeResponse]
+    public let errors: [String: Error]
+    public let combinedStats: ScrapeResponse
+    public let successfulTrackers: Int
+    public let failedTrackers: Int
+}
     
     // Get peer state
     public func getPeerBitfield() async -> [Bool]?
@@ -424,6 +560,171 @@ struct MultiTorrentExample {
 }
 ```
 
+### Advanced Peer Discovery with DHT, PEX, and Extended Trackers
+
+```swift
+import SwiftyBT
+import Logging
+
+@main
+struct AdvancedPeerDiscoveryExample {
+    static func main() async {
+        // Configure logging
+        LoggingSystem.bootstrap { label in
+            var handler = StreamLogHandler.standardOutput(label: label)
+            handler.logLevel = .info
+            return handler
+        }
+        
+        // Create client with all peer discovery features enabled
+        let client = TorrentClient(enableDHT: true, enablePEX: true)
+        
+        do {
+            let session = try client.loadTorrent(from: torrentURL)
+            
+            print("Torrent: \(session.torrentFile.info.name)")
+            print("Size: \(session.torrentFile.getTotalSize()) bytes")
+            
+            // Start downloading with all peer discovery methods
+            try await session.start(downloadPath: "/tmp/downloads")
+            
+            // Monitor progress with enhanced peer discovery
+            while session.getStatus().isRunning {
+                let status = session.getStatus()
+                print("Progress: \(Int(status.progress * 100))%")
+                print("Peers: \(status.peerCount) (from DHT + PEX + Extended Trackers)")
+                print("Speed: \(status.downloadSpeed) bytes/s")
+                
+                try await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+            }
+            
+        } catch {
+            print("Error: \(error)")
+        }
+    }
+}
+```
+
+### DHT Peer Discovery
+
+```swift
+import SwiftyBT
+
+struct DHTExample {
+    static func main() async {
+        let dhtClient = DHTClient(port: 6881)
+        
+        do {
+            // Start DHT client
+            try await dhtClient.start()
+            print("DHT client started successfully")
+            
+            // Create sample info hash
+            let infoHash = Data((0..<20).map { _ in UInt8.random(in: 0...255) })
+            
+            // Find peers using DHT
+            let peers = try await dhtClient.findPeers(for: infoHash)
+            print("DHT found \(peers.count) peers")
+            
+            // Process found peers
+            for peer in peers {
+                print("DHT Peer: \(peer)")
+            }
+            
+        } catch {
+            print("DHT error: \(error)")
+        }
+    }
+}
+```
+
+### PEX Peer Exchange
+
+```swift
+import SwiftyBT
+
+struct PEXExample {
+    static func main() async {
+        let pexClient = PEXClient()
+        
+        // Add known peers
+        let knownPeers = [
+            "192.168.1.100:6881",
+            "10.0.0.50:6882",
+            "172.16.0.25:6883"
+        ]
+        pexClient.addKnownPeers(knownPeers)
+        
+        // Create PEX message
+        if let pexMessage = pexClient.createPEXMessage(peers: knownPeers) {
+            print("Created PEX message with \(knownPeers.count) peers")
+            print("Message size: \(pexMessage.count) bytes")
+        }
+        
+        // Simulate receiving PEX message
+        let newPeers = ["203.0.113.10:6881", "198.51.100.20:6882"]
+        let pexMessageData = pexClient.createPEXMessage(peers: newPeers)
+        
+        if let messageData = pexMessageData {
+            do {
+                let receivedMessage = try pexClient.parsePEXMessage(messageData)
+                pexClient.processPEXMessage(receivedMessage)
+                print("Processed PEX message with \(receivedMessage.added.count) new peers")
+            } catch {
+                print("PEX error: \(error)")
+            }
+        }
+    }
+}
+```
+
+### Extended Tracker Support
+
+```swift
+import SwiftyBT
+
+struct ExtendedTrackerExample {
+    static func main() async {
+        let extendedTracker = ExtendedTrackerClient()
+        
+        // Create sample torrent file
+        let torrentFile = try TorrentFile.parse(from: torrentURL)
+        
+        // Get all available trackers (including public trackers)
+        let allTrackers = extendedTracker.getAllTrackers(for: torrentFile)
+        print("Total trackers available: \(allTrackers.count)")
+        
+        // Test tracker connectivity
+        for tracker in allTrackers.prefix(5) {
+            let isWorking = await extendedTracker.testTracker(tracker)
+            print("Tracker \(tracker): \(isWorking ? "Working" : "Failed")")
+        }
+        
+        // Announce to multiple trackers
+        do {
+            let response = try await extendedTracker.announceToMultipleTrackers(
+                torrentFile: torrentFile,
+                infoHash: infoHash,
+                peerId: peerId,
+                port: 6881,
+                uploaded: 0,
+                downloaded: 0,
+                left: torrentFile.getTotalSize(),
+                event: .started
+            )
+            
+            print("Extended tracker response:")
+            print("- Total peers: \(response.totalPeers)")
+            print("- Successful trackers: \(response.successfulTrackers)")
+            print("- Failed trackers: \(response.failedTrackers)")
+            
+        } catch {
+            print("Extended tracker error: \(error)")
+        }
+    }
+}
+```
+
 ### Custom Tracker Communication
 
 ```swift
@@ -548,6 +849,118 @@ struct AdvancedExample {
         try eventLoopGroup.syncShutdownGracefully()
     }
 }
+```
+
+## 🌟 Advanced Peer Discovery Features
+
+SwiftyBT now includes three major peer discovery enhancements that significantly improve BitTorrent performance and reliability.
+
+### DHT (Distributed Hash Table)
+
+**What is DHT?**
+DHT is a decentralized peer discovery mechanism that allows BitTorrent clients to find peers without relying on centralized trackers. It uses a distributed hash table to store and retrieve peer information.
+
+**Key Benefits:**
+- **Decentralized**: No dependency on centralized trackers
+- **Scalable**: Can handle large numbers of peers
+- **Resilient**: Continues working even if some nodes fail
+- **Automatic**: Integrated seamlessly into the torrent client
+
+**Technical Implementation:**
+- **Protocol**: Kademlia DHT protocol
+- **Network**: UDP-based communication
+- **Routing**: XOR-based distance metric
+- **Bootstrap**: Automatic bootstrap with known nodes
+
+### PEX (Peer Exchange)
+
+**What is PEX?**
+PEX allows BitTorrent clients to exchange peer lists directly with each other, reducing the need for tracker requests and improving peer discovery efficiency.
+
+**Key Benefits:**
+- **Efficient**: Reduces tracker requests
+- **Fast**: Direct peer-to-peer communication
+- **Automatic**: Integrated into peer communication
+- **Standard**: Implements BitTorrent PEX protocol
+
+**Technical Implementation:**
+- **Protocol**: BitTorrent PEX extension protocol
+- **Messages**: Bencoded peer lists
+- **Integration**: Seamless integration with peer wire protocol
+- **Limits**: Configurable peer limits and message sizes
+
+### Extended Tracker Support
+
+**What are Extended Trackers?**
+Extended tracker support adds multiple public trackers to supplement the trackers specified in the torrent file, providing better peer coverage and redundancy.
+
+**Key Benefits:**
+- **Multiple Trackers**: Uses both torrent file trackers and public trackers
+- **Redundancy**: If some trackers fail, others continue working
+- **Better Coverage**: More trackers mean more potential peers
+- **Automatic**: No configuration required
+
+**Technical Implementation:**
+- **Concurrent Requests**: Multiple tracker announces simultaneously
+- **Response Aggregation**: Combines responses from multiple trackers
+- **Error Handling**: Graceful handling of tracker failures
+- **Deduplication**: Removes duplicate peers across trackers
+
+### Combined Performance Benefits
+
+When all three features work together, you get:
+
+**Peer Discovery:**
+- **Traditional Trackers**: From torrent file
+- **DHT**: Decentralized peer discovery
+- **PEX**: Peer-to-peer exchange
+- **Extended Trackers**: Additional public trackers
+
+**Combined Benefits:**
+- **Higher Peer Count**: More sources for peer discovery
+- **Better Connectivity**: Redundancy across multiple methods
+- **Faster Discovery**: Multiple simultaneous discovery methods
+- **Improved Reliability**: If one method fails, others continue
+
+### Configuration Options
+
+**DHT Configuration:**
+- **Port**: Default 6881 (configurable)
+- **Bootstrap Nodes**: Automatic bootstrap with known DHT nodes
+- **Routing Table**: Automatic management of DHT routing table
+
+**PEX Configuration:**
+- **Extension ID**: Standard PEX extension ID (1)
+- **Message Format**: Bencoded PEX messages
+- **Peer Limits**: Configurable limits for peer exchange
+
+**Extended Tracker Configuration:**
+- **Public Trackers**: Comprehensive list of reliable public trackers
+- **Concurrent Announces**: Up to 5 concurrent tracker announces
+- **Timeout**: Configurable timeout for tracker requests
+
+### Migration Guide
+
+**For Existing Users:**
+No changes required! All new features are backward compatible:
+
+```swift
+// Old code still works
+let client = TorrentClient()
+let session = try client.loadTorrent(from: torrentURL)
+try await session.start(downloadPath: "/path/to/downloads")
+
+// New features are automatically enabled for better performance
+```
+
+**For New Users:**
+Enable all features for optimal performance:
+
+```swift
+// Recommended configuration
+let client = TorrentClient(enableDHT: true, enablePEX: true)
+let session = try client.loadTorrent(from: torrentURL)
+try await session.start(downloadPath: "/path/to/downloads")
 ```
 
 ## 🛠️ Development

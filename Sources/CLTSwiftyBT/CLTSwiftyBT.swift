@@ -15,7 +15,7 @@ struct CLTSwiftyBT {
         print("==========================")
         
         // Debug info hash
-        debugInfoHash()
+        // debugInfoHash() // Commented out for now
         
         // Parse command line arguments
         let arguments = CommandLine.arguments.dropFirst()
