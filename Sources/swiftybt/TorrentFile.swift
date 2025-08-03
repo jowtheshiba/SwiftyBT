@@ -1,6 +1,5 @@
 import Foundation
 import Crypto
-import CryptoKit
 
 /// Represents a BitTorrent .torrent file
 public struct TorrentFile {
