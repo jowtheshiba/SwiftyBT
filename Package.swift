@@ -44,7 +44,7 @@ let package = Package(
         .executableTarget(
             name: "CLTSwiftyBT",
             dependencies: ["SwiftyBT"],
-            path: "Sources/clt-swiftybt/Sources/CLTSwiftyBT"),
+            path: "Sources/CLTSwiftyBT"),
         .testTarget(
             name: "SwiftyBTTests",
             dependencies: ["SwiftyBT"],
