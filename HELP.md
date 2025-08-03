@@ -11,7 +11,7 @@ Comprehensive documentation for SwiftyBT - a modern BitTorrent client library fo
 - [Features](#features)
 - [Requirements](#requirements)
 - [Installation](#installation)
-- [Architecture](#architecture)
+- [Core Components](#architecture)
 - [Concurrency Model](#concurrency-model)
 - [API Reference](#api-reference)
 - [Examples](#examples)
