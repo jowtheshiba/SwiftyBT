@@ -80,11 +80,7 @@ Or add it to your Xcode project:
 2. Enter the repository URL
 3. Select the version and add to your target
 
-## 🏗️ Architecture
-
-SwiftyBT is built with a modular architecture that separates concerns and enables high performance:
-
-### Core Components
+## 🏗️ Core Components
 
 ```
 SwiftyBT/
