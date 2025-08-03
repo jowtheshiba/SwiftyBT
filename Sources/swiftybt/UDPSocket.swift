@@ -26,7 +26,11 @@ public class UDPSocket {
     
     /// Create UDP socket
     private func createSocket() throws {
+        #if canImport(Darwin)
         socketFD = socket(AF_INET, Int32(SOCK_DGRAM), 0)
+        #else
+        socketFD = socket(AF_INET, SOCK_DGRAM, 0)
+        #endif
         if socketFD == -1 {
             throw UDPSocketError.socketCreationFailed
         }
@@ -130,8 +134,13 @@ public class UDPSocket {
     private func resolveAddress(host: String, port: UInt16) throws -> sockaddr_in {
         var hints = addrinfo()
         hints.ai_family = AF_INET
+        #if canImport(Darwin)
         hints.ai_socktype = Int32(SOCK_DGRAM)
         hints.ai_protocol = Int32(IPPROTO_UDP)
+        #else
+        hints.ai_socktype = SOCK_DGRAM
+        hints.ai_protocol = IPPROTO_UDP
+        #endif
         
         var result: UnsafeMutablePointer<addrinfo>?
         let status = getaddrinfo(host, String(port), &hints, &result)
