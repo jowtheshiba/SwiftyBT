@@ -7,6 +7,20 @@
 
 A modern BitTorrent client library written in Swift.
 
+---
+
+## 🛠️ CLI Tool: clt-swiftybt
+
+A simple command-line torrent downloader is available in the [clt-swiftybt](clt-swiftybt/) subdirectory:
+
+- Download one or more `.torrent` files from the command line
+- Progress bar and real-time stats for each torrent
+- Downloads to `torrent_downloads` folder in the current directory
+
+**See [clt-swiftybt/README.md](clt-swiftybt/README.md) for usage and installation.**
+
+---
+
 ## 🚀 Quick Start
 
 ### Installation
