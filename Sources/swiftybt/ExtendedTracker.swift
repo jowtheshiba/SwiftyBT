@@ -169,28 +169,8 @@ public class ExtendedTrackerClient {
     /// Get public trackers list
     /// - Returns: Array of public tracker URLs
     private func getPublicTrackers() -> [String] {
-        return [
-            "udp://tracker.opentrackr.org:1337/announce",
-            "udp://tracker.openbittorrent.com:6969/announce",
-            "udp://tracker.internetwarriors.net:1337/announce",
-            "udp://exodus.desync.com:6969/announce",
-            "udp://tracker.cyberia.is:6969/announce",
-            "udp://tracker.leechers-paradise.org:6969/announce",
-            "udp://tracker.coppersurfer.tk:6969/announce",
-            "udp://tracker.pirateparty.gr:6969/announce",
-            "udp://tracker.moeking.me:6969/announce",
-            "udp://tracker.zerobytes.xyz:1337/announce",
-            "udp://tracker.opentrackr.org:1337/announce",
-            "udp://tracker.openbittorrent.com:6969/announce",
-            "udp://tracker.internetwarriors.net:1337/announce",
-            "udp://exodus.desync.com:6969/announce",
-            "udp://tracker.cyberia.is:6969/announce",
-            "udp://tracker.leechers-paradise.org:6969/announce",
-            "udp://tracker.coppersurfer.tk:6969/announce",
-            "udp://tracker.pirateparty.gr:6969/announce",
-            "udp://tracker.moeking.me:6969/announce",
-            "udp://tracker.zerobytes.xyz:1337/announce"
-        ]
+        // Use UDPTrackersProvider for comprehensive tracker list
+        return UDPTrackersProvider.getAllUDPTrackers()
     }
     
     /// Normalize tracker URL for deduplication

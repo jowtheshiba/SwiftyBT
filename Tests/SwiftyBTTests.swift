@@ -189,12 +189,8 @@ final class SwiftyBTTests: XCTestCase {
     }
     
     func testTrackerClientWithCustomEventLoop() {
-        let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
-        let trackerClient = TrackerClient(eventLoopGroup: eventLoopGroup)
+        let trackerClient = TrackerClient()
         XCTAssertNotNil(trackerClient)
-        
-        // Clean up
-        try? eventLoopGroup.syncShutdownGracefully()
     }
     
     // MARK: - PeerWire Tests
@@ -205,12 +201,8 @@ final class SwiftyBTTests: XCTestCase {
     }
     
     func testPeerWireClientWithCustomEventLoop() {
-        let eventLoopGroup = MultiThreadedEventLoopGroup(numberOfThreads: 1)
-        let peerWireClient = PeerWireClient(eventLoopGroup: eventLoopGroup)
+        let peerWireClient = PeerWireClient()
         XCTAssertNotNil(peerWireClient)
-        
-        // Clean up
-        try? eventLoopGroup.syncShutdownGracefully()
     }
     
     // MARK: - Performance Tests
