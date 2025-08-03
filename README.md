@@ -70,5 +70,3 @@ try await withTaskGroup(of: Void.self) { group in
 ## 📚 Documentation
 
 For detailed documentation, examples, and API reference, see [HELP.md](HELP.md).
-
----
