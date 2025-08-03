@@ -71,14 +71,6 @@ try await withTaskGroup(of: Void.self) { group in
 
 For detailed documentation, examples, and API reference, see [HELP.md](HELP.md).
 
-## 🤝 Contributing
-
-We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md) for details.
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
 ---
 
 **SwiftyBT** - Modern BitTorrent client library for Swift
