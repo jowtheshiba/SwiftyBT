@@ -7,7 +7,7 @@ public class ExtendedTrackerClient {
     private let baseTrackerClient: TrackerClient
     private let additionalTrackers: [String]
     private let maxConcurrentAnnounces = 5
-    private let announceTimeout: TimeInterval = 10.0
+    private let announceTimeout: TimeInterval = 30.0
     
     public init(additionalTrackers: [String] = []) {
         self.logger = Logger(label: "SwiftyBT.ExtendedTracker")

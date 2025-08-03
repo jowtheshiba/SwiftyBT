@@ -7,75 +7,45 @@ public class UDPTrackersProvider {
     /// - Returns: Array of UDP tracker URLs
     public static func getAllUDPTrackers() -> [String] {
         return [
-            // OpenTrackr
-            "udp://tracker.opentrackr.org:1337/announce",
-            "udp://open.demonii.com:1337/announce",
-            "udp://open.tracker.cl:1337/announce",
-            "udp://open.stealth.si:80/announce",
+            // Most reliable trackers (mix of HTTP and UDP)
+            "http://tracker.opentrackr.org:1337/announce",
+            "http://open.demonii.com:1337/announce",
+            "http://open.tracker.cl:1337/announce",
+            "http://open.stealth.si:80/announce",
             
-            // Popular trackers
-            "udp://explodie.org:6969/announce",
-            "udp://exodus.desync.com:6969/announce",
-            "udp://opentracker.io:6969/announce",
-            "udp://bt.ktrackers.com:6666/announce",
-            "udp://tracker.qu.ax:6969/announce",
-            "udp://ttk2.nbaonlineservice.com:6969/announce",
-            "udp://tracker2.dler.org:80/announce",
-            "udp://tracker.tryhackx.org:6969/announce",
-            "udp://tracker.torrust-demo.com:6969/announce",
-            "udp://tracker.theoks.net:6969/announce",
-            "udp://tracker.srv00.com:6969/announce",
-            "udp://tracker.gmi.gd:6969/announce",
-            "udp://tracker.fnix.net:6969/announce",
-            "udp://tracker.filemail.com:6969/announce",
-            "udp://tracker.dler.org:6969/announce",
-            "udp://tracker.bittor.pw:1337/announce",
-            "udp://retracker01-msk-virt.corbina.net:80/announce",
-            "udp://public.tracker.vraphim.com:6969/announce",
-            "udp://p4p.arenabg.com:1337/announce",
-            "udp://open.free-tracker.ga:6969/announce",
-            "udp://open.dstud.io:6969/announce",
-            "udp://ns-1.x-fins.com:6969/announce",
-            "udp://martin-gebhardt.eu:25/announce",
-            "udp://leet-tracker.moe:1337/announce",
-            "udp://isk.richardsw.club:6969/announce",
-            "udp://ipv4announce.sktorrent.eu:6969/announce",
-            "udp://hificode.in:6969/announce",
-            "udp://glotorrents.pw:6969/announce",
-            "udp://evan.im:6969/announce",
-            "udp://discord.heihachi.pw:6969/announce",
-            "udp://d40969.acod.regrucolo.ru:6969/announce",
-            "udp://bittorrent-tracker.e-n-c-r-y-p-t.net:1337/announce",
-            "udp://bandito.byterunner.io:6969/announce",
-            "udp://1c.premierzal.ru:6969/announce",
+            // Popular working trackers
+            "http://explodie.org:6969/announce",
+            "http://exodus.desync.com:6969/announce",
+            "http://opentracker.io:6969/announce",
+            "http://tracker.qu.ax:6969/announce",
+            "http://tracker2.dler.org:80/announce",
+            "http://tracker.dler.org:6969/announce",
+            "http://tracker.bittor.pw:1337/announce",
+            "http://public.tracker.vraphim.com:6969/announce",
+            "http://p4p.arenabg.com:1337/announce",
             
-            // Additional trackers
-            "udp://wepzone.net:6969/announce",
-            "udp://udp.tracker.projectk.org:23333/announce",
-            "udp://tracker.zupix.online:6969/announce",
-            "udp://tracker.yume-hatsuyuki.moe:6969/announce",
-            "udp://tracker.wepzone.net:6969/announce",
-            "udp://tracker.valete.tf:9999/announce",
-            "udp://tracker.therarbg.to:6969/announce",
-            "udp://tracker.skillindia.site:6969/announce",
-            "udp://tracker.plx.im:6969/announce",
-            "udp://tracker.kmzs123.cn:17272/announce",
-            "udp://tracker.hifitechindia.com:6969/announce",
-            "udp://tracker.hifimarket.in:2710/announce",
-            "udp://tracker.healthcareindia.store:1337/announce",
-            "udp://tracker.gigantino.net:6969/announce",
-            "udp://tracker.bitcoinindia.space:6969/announce",
-            "udp://tr4ck3r.duckdns.org:6969/announce",
-            "udp://retracker.lanta.me:2710/announce",
-            "udp://ipv4.rer.lol:2710/announce",
-            "udp://concen.org:6969/announce"
-        ]
-    }
-    
-    /// Get primary UDP trackers (most reliable)
-    /// - Returns: Array of primary UDP tracker URLs
-    public static func getPrimaryUDPTrackers() -> [String] {
-        return [
+            // Additional reliable trackers
+            "http://tracker.tryhackx.org:6969/announce",
+            "http://tracker.theoks.net:6969/announce",
+            "http://tracker.srv00.com:6969/announce",
+            "http://tracker.gmi.gd:6969/announce",
+            "http://tracker.fnix.net:6969/announce",
+            "http://tracker.filemail.com:6969/announce",
+            "http://retracker01-msk-virt.corbina.net:80/announce",
+            "http://open.free-tracker.ga:6969/announce",
+            "http://open.dstud.io:6969/announce",
+            "http://ns-1.x-fins.com:6969/announce",
+            "http://leet-tracker.moe:1337/announce",
+            "http://isk.richardsw.club:6969/announce",
+            "http://ipv4announce.sktorrent.eu:6969/announce",
+            "http://hificode.in:6969/announce",
+            "http://glotorrents.pw:6969/announce",
+            "http://evan.im:6969/announce",
+            "http://discord.heihachi.pw:6969/announce",
+            "http://bittorrent-tracker.e-n-c-r-y-p-t.net:1337/announce",
+            "http://bandito.byterunner.io:6969/announce",
+            
+            // UDP trackers (fewer, more reliable ones)
             "udp://tracker.opentrackr.org:1337/announce",
             "udp://open.demonii.com:1337/announce",
             "udp://open.tracker.cl:1337/announce",
@@ -91,30 +61,48 @@ public class UDPTrackersProvider {
         ]
     }
     
+    /// Get primary UDP trackers (most reliable)
+    /// - Returns: Array of primary UDP tracker URLs
+    public static func getPrimaryUDPTrackers() -> [String] {
+        return [
+            "http://tracker.opentrackr.org:1337/announce",
+            "http://open.demonii.com:1337/announce",
+            "http://open.tracker.cl:1337/announce",
+            "http://explodie.org:6969/announce",
+            "http://exodus.desync.com:6969/announce",
+            "http://opentracker.io:6969/announce",
+            "http://tracker.qu.ax:6969/announce",
+            "http://tracker2.dler.org:80/announce",
+            "http://tracker.dler.org:6969/announce",
+            "http://tracker.bittor.pw:1337/announce",
+            "http://public.tracker.vraphim.com:6969/announce",
+            "http://p4p.arenabg.com:1337/announce"
+        ]
+    }
+    
     /// Get backup UDP trackers (secondary reliable)
     /// - Returns: Array of backup UDP tracker URLs
     public static func getBackupUDPTrackers() -> [String] {
         return [
-            "udp://tracker.tryhackx.org:6969/announce",
-            "udp://tracker.theoks.net:6969/announce",
-            "udp://tracker.srv00.com:6969/announce",
-            "udp://tracker.gmi.gd:6969/announce",
-            "udp://tracker.fnix.net:6969/announce",
-            "udp://tracker.filemail.com:6969/announce",
-            "udp://retracker01-msk-virt.corbina.net:80/announce",
-            "udp://open.free-tracker.ga:6969/announce",
-            "udp://open.dstud.io:6969/announce",
-            "udp://ns-1.x-fins.com:6969/announce",
-            "udp://leet-tracker.moe:1337/announce",
-            "udp://isk.richardsw.club:6969/announce",
-            "udp://ipv4announce.sktorrent.eu:6969/announce",
-            "udp://hificode.in:6969/announce",
-            "udp://glotorrents.pw:6969/announce",
-            "udp://evan.im:6969/announce",
-            "udp://discord.heihachi.pw:6969/announce",
-            "udp://bittorrent-tracker.e-n-c-r-y-p-t.net:1337/announce",
-            "udp://bandito.byterunner.io:6969/announce",
-            "udp://1c.premierzal.ru:6969/announce"
+            "http://tracker.tryhackx.org:6969/announce",
+            "http://tracker.theoks.net:6969/announce",
+            "http://tracker.srv00.com:6969/announce",
+            "http://tracker.gmi.gd:6969/announce",
+            "http://tracker.fnix.net:6969/announce",
+            "http://tracker.filemail.com:6969/announce",
+            "http://retracker01-msk-virt.corbina.net:80/announce",
+            "http://open.free-tracker.ga:6969/announce",
+            "http://open.dstud.io:6969/announce",
+            "http://ns-1.x-fins.com:6969/announce",
+            "http://leet-tracker.moe:1337/announce",
+            "http://isk.richardsw.club:6969/announce",
+            "http://ipv4announce.sktorrent.eu:6969/announce",
+            "http://hificode.in:6969/announce",
+            "http://glotorrents.pw:6969/announce",
+            "http://evan.im:6969/announce",
+            "http://discord.heihachi.pw:6969/announce",
+            "http://bittorrent-tracker.e-n-c-r-y-p-t.net:1337/announce",
+            "http://bandito.byterunner.io:6969/announce"
         ]
     }
     
@@ -122,25 +110,18 @@ public class UDPTrackersProvider {
     /// - Returns: Array of extended UDP tracker URLs
     public static func getExtendedUDPTrackers() -> [String] {
         return [
-            "udp://wepzone.net:6969/announce",
-            "udp://udp.tracker.projectk.org:23333/announce",
-            "udp://tracker.zupix.online:6969/announce",
-            "udp://tracker.yume-hatsuyuki.moe:6969/announce",
-            "udp://tracker.wepzone.net:6969/announce",
-            "udp://tracker.valete.tf:9999/announce",
-            "udp://tracker.therarbg.to:6969/announce",
-            "udp://tracker.skillindia.site:6969/announce",
-            "udp://tracker.plx.im:6969/announce",
-            "udp://tracker.kmzs123.cn:17272/announce",
-            "udp://tracker.hifitechindia.com:6969/announce",
-            "udp://tracker.hifimarket.in:2710/announce",
-            "udp://tracker.healthcareindia.store:1337/announce",
-            "udp://tracker.gigantino.net:6969/announce",
-            "udp://tracker.bitcoinindia.space:6969/announce",
-            "udp://tr4ck3r.duckdns.org:6969/announce",
-            "udp://retracker.lanta.me:2710/announce",
-            "udp://ipv4.rer.lol:2710/announce",
-            "udp://concen.org:6969/announce"
+            "udp://tracker.opentrackr.org:1337/announce",
+            "udp://open.demonii.com:1337/announce",
+            "udp://open.tracker.cl:1337/announce",
+            "udp://explodie.org:6969/announce",
+            "udp://exodus.desync.com:6969/announce",
+            "udp://opentracker.io:6969/announce",
+            "udp://tracker.qu.ax:6969/announce",
+            "udp://tracker2.dler.org:80/announce",
+            "udp://tracker.dler.org:6969/announce",
+            "udp://tracker.bittor.pw:1337/announce",
+            "udp://public.tracker.vraphim.com:6969/announce",
+            "udp://p4p.arenabg.com:1337/announce"
         ]
     }
     

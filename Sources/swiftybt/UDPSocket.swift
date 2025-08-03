@@ -8,7 +8,7 @@ public class UDPSocket {
     private var socket: Int32 = -1
     private let timeout: TimeInterval
     
-    public init(timeout: TimeInterval = 10.0) {
+    public init(timeout: TimeInterval = 30.0) {
         self.timeout = timeout
         self.logger = Logger(label: "SwiftyBT.UDPSocket")
     }
