@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 /// Bencode parser for BitTorrent .torrent files
 public struct Bencode {
