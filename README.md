@@ -4,7 +4,7 @@
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-blue.svg)](https://swift.org)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-A modern, high-performance BitTorrent client library written in Swift, designed for concurrent torrent management with full protocol support.
+A modern BitTorrent client library written in Swift.
 
 ## 🚀 Quick Start
 
