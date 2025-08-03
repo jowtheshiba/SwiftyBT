@@ -72,7 +72,3 @@ try await withTaskGroup(of: Void.self) { group in
 For detailed documentation, examples, and API reference, see [HELP.md](HELP.md).
 
 ---
-
-**SwiftyBT** - Modern BitTorrent client library for Swift
-
-Built with ❤️ using Swift Concurrency and SwiftNIO 
