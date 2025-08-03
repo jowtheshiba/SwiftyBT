@@ -1,11 +1,18 @@
 import Foundation
+#if canImport(Darwin)
 import Darwin
+#else
+import Glibc
+#endif
 import Logging
+#if canImport(Darwin)
+import unistd
+#endif
 
 /// UDP socket implementation using low-level BSD sockets
 public class UDPSocket {
     private let logger: Logger
-    private var socket: Int32 = -1
+    private var socketFD: Int32 = -1
     private let timeout: TimeInterval
     
     public init(timeout: TimeInterval = 30.0) {
@@ -14,25 +21,25 @@ public class UDPSocket {
     }
     
     deinit {
-        close()
+        closeSocket()
     }
     
     /// Create UDP socket
     private func createSocket() throws {
-        socket = Darwin.socket(AF_INET, SOCK_DGRAM, 0)
-        if socket == -1 {
+        socketFD = socket(AF_INET, SOCK_DGRAM, 0)
+        if socketFD == -1 {
             throw UDPSocketError.socketCreationFailed
         }
         
         // Set socket options
         var timeoutValue = timeval(tv_sec: Int(timeout), tv_usec: 0)
-        let result = setsockopt(socket, SOL_SOCKET, SO_RCVTIMEO, &timeoutValue, socklen_t(MemoryLayout<timeval>.size))
+        let result = setsockopt(socketFD, SOL_SOCKET, SO_RCVTIMEO, &timeoutValue, socklen_t(MemoryLayout<timeval>.size))
         if result == -1 {
             throw UDPSocketError.socketOptionFailed
         }
         
         // Set send timeout
-        let sendResult = setsockopt(socket, SOL_SOCKET, SO_SNDTIMEO, &timeoutValue, socklen_t(MemoryLayout<timeval>.size))
+        let sendResult = setsockopt(socketFD, SOL_SOCKET, SO_SNDTIMEO, &timeoutValue, socklen_t(MemoryLayout<timeval>.size))
         if sendResult == -1 {
             throw UDPSocketError.socketOptionFailed
         }
@@ -46,7 +53,7 @@ public class UDPSocket {
     /// - Throws: UDPSocketError if send fails
     public func send(_ data: Data, to host: String, port: UInt16) async throws {
         try createSocket()
-        defer { close() }
+        defer { closeSocket() }
         
         // Resolve host address
         let address = try resolveAddress(host: host, port: port)
@@ -55,7 +62,7 @@ public class UDPSocket {
         let result = data.withUnsafeBytes { buffer in
             withUnsafePointer(to: address) { addrPtr in
                 addrPtr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockAddrPtr in
-                    Darwin.sendto(socket, buffer.baseAddress, buffer.count, 0, sockAddrPtr, socklen_t(MemoryLayout<sockaddr_in>.size))
+                    sendto(socketFD, buffer.baseAddress, buffer.count, 0, sockAddrPtr, socklen_t(MemoryLayout<sockaddr_in>.size))
                 }
             }
         }
@@ -76,7 +83,7 @@ public class UDPSocket {
     /// - Throws: UDPSocketError if operation fails
     public func sendAndReceive(_ data: Data, to host: String, port: UInt16) async throws -> Data {
         try createSocket()
-        defer { close() }
+        defer { closeSocket() }
         
         // Resolve host address
         let address = try resolveAddress(host: host, port: port)
@@ -85,7 +92,7 @@ public class UDPSocket {
         let sendResult = data.withUnsafeBytes { buffer in
             withUnsafePointer(to: address) { addrPtr in
                 addrPtr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sockAddrPtr in
-                    Darwin.sendto(socket, buffer.baseAddress, buffer.count, 0, sockAddrPtr, socklen_t(MemoryLayout<sockaddr_in>.size))
+                    sendto(socketFD, buffer.baseAddress, buffer.count, 0, sockAddrPtr, socklen_t(MemoryLayout<sockaddr_in>.size))
                 }
             }
         }
@@ -103,7 +110,7 @@ public class UDPSocket {
         
         // Use a simpler approach without complex pointer manipulation
         let receiveResult = buffer.withUnsafeMutableBytes { buffer in
-            Darwin.recvfrom(socket, buffer.baseAddress, buffer.count, 0, nil, nil)
+            recvfrom(socketFD, buffer.baseAddress, buffer.count, 0, nil, nil)
         }
         
         if receiveResult == -1 {
@@ -150,10 +157,10 @@ public class UDPSocket {
     }
     
     /// Close socket
-    private func close() {
-        if socket != -1 {
-            Darwin.close(socket)
-            socket = -1
+    private func closeSocket() {
+        if socketFD != -1 {
+            close(socketFD)
+            socketFD = -1
         }
     }
 }
