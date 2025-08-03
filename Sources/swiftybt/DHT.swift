@@ -1,5 +1,4 @@
 import Foundation
-import Network
 import Logging
 
 /// DHT (Distributed Hash Table) client for peer discovery
@@ -8,43 +7,32 @@ public class DHTClient {
     private let nodeId: Data
     private var routingTable: [String: DHTNode] = [:]
     private let port: UInt16
-    private var udpConnection: NWConnection?
+    private let udpSocket: UDPSocket
     private let queue = DispatchQueue(label: "dht.client", qos: .utility)
+    
+    // Improved routing table with buckets
+    private var buckets: [DHTBucket] = []
+    private let maxBucketSize = 8
+    private let maxBuckets = 160
+    
+    // Pending queries for better response handling
+    private var pendingQueries: [String: DHTQuery] = [:]
     
     public init(port: UInt16 = 6881) {
         self.port = port
         self.nodeId = Data((0..<20).map { _ in UInt8.random(in: 0...255) })
         self.logger = Logger(label: "SwiftyBT.DHT")
+        self.udpSocket = UDPSocket(timeout: 10.0)
+        
+        // Initialize buckets
+        for _ in 0..<maxBuckets {
+            buckets.append(DHTBucket(maxSize: maxBucketSize))
+        }
     }
     
     /// Start DHT client
     public func start() async throws {
         logger.info("Starting DHT client on port \(port)")
-        
-        let endpoint = NWEndpoint.hostPort(
-            host: NWEndpoint.Host("0.0.0.0"),
-            port: NWEndpoint.Port(integerLiteral: port)
-        )
-        
-        udpConnection = NWConnection(to: endpoint, using: .udp)
-        
-        udpConnection?.stateUpdateHandler = { [weak self] state in
-            switch state {
-            case .ready:
-                self?.logger.info("DHT UDP connection ready")
-                Task {
-                    await self?.startListening()
-                }
-            case .failed(let error):
-                self?.logger.error("DHT UDP connection failed: \(error)")
-            case .cancelled:
-                self?.logger.info("DHT UDP connection cancelled")
-            default:
-                break
-            }
-        }
-        
-        udpConnection?.start(queue: queue)
         
         // Bootstrap with known DHT nodes
         try await bootstrap()
@@ -52,11 +40,11 @@ public class DHTClient {
     
     /// Stop DHT client
     public func stop() {
-        udpConnection?.cancel()
-        udpConnection = nil
+        // Cleanup any pending operations
+        pendingQueries.removeAll()
     }
     
-    /// Find peers for a torrent
+    /// Find peers for a torrent with improved algorithm
     /// - Parameter infoHash: Info hash of the torrent
     /// - Returns: Array of peer addresses
     public func findPeers(for infoHash: Data) async throws -> [String] {
@@ -65,29 +53,66 @@ public class DHTClient {
         var peers: Set<String> = []
         let targetId = infoHash
         
-        // Perform iterative lookup
+        // Get closest nodes to target
         var nodesToQuery = getClosestNodes(to: targetId, limit: 8)
+        var queriedNodes: Set<String> = []
         
-        for _ in 0..<3 { // Max 3 iterations
-            var newNodesToQuery: [DHTNode] = []
+        // Perform iterative lookup with multiple rounds
+        for round in 0..<5 { // Increased rounds for better coverage
+            logger.info("DHT lookup round \(round + 1)")
             
-            for node in nodesToQuery {
-                do {
-                    let response = try await getPeers(from: node, infoHash: infoHash)
-                    peers.formUnion(response.peers)
-                    newNodesToQuery.append(contentsOf: response.nodes)
-                } catch {
-                    logger.warning("Failed to get peers from node \(node.address): \(error)")
+            var newNodesToQuery: [DHTNode] = []
+            var roundPeers: Set<String> = []
+            
+            // Query nodes in parallel
+            await withTaskGroup(of: (String, [String], [DHTNode]).self) { group in
+                for node in nodesToQuery {
+                    let nodeKey = "\(node.address):\(node.port)"
+                    guard !queriedNodes.contains(nodeKey) else { continue }
+                    
+                    group.addTask {
+                        do {
+                            let response = try await self.getPeers(from: node, infoHash: infoHash)
+                            return (nodeKey, response.peers, response.nodes)
+                        } catch {
+                            self.logger.warning("Failed to get peers from node \(node.address): \(error)")
+                            return (nodeKey, [], [])
+                        }
+                    }
+                }
+                
+                // Collect results
+                for await (nodeKey, nodePeers, nodeNodes) in group {
+                    queriedNodes.insert(nodeKey)
+                    roundPeers.formUnion(nodePeers)
+                    newNodesToQuery.append(contentsOf: nodeNodes)
                 }
             }
             
-            nodesToQuery = newNodesToQuery.prefix(8).map { $0 }
+            peers.formUnion(roundPeers)
+            logger.info("Round \(round + 1): Found \(roundPeers.count) peers, \(newNodesToQuery.count) new nodes")
+            
+            // Update nodes to query for next round
+            nodesToQuery = newNodesToQuery
+                .filter { node in
+                    let nodeKey = "\(node.address):\(node.port)"
+                    return !queriedNodes.contains(nodeKey)
+                }
+                .sorted { node1, node2 in
+                    let distance1 = xorDistance(node1.id, targetId)
+                    let distance2 = xorDistance(node2.id, targetId)
+                    return distance1.count > 0 && distance2.count > 0 && distance1[0] < distance2[0]
+                }
+                .prefix(8)
+                .map { $0 }
             
             if nodesToQuery.isEmpty {
+                logger.info("No more nodes to query")
                 break
             }
         }
         
+        logger.info("DHT search completed. Found \(peers.count) unique peers")
         return Array(peers)
     }
     
@@ -96,47 +121,44 @@ public class DHTClient {
         let bootstrapNodes = [
             "router.bittorrent.com:6881",
             "dht.transmissionbt.com:6881",
-            "router.utorrent.com:6881"
+            "router.utorrent.com:6881",
+            "dht.aelitis.com:6881",
+            "router.bitcomet.com:6881"
         ]
         
-        for nodeAddress in bootstrapNodes {
-            do {
-                let components = nodeAddress.split(separator: ":")
-                guard components.count == 2,
-                      let host = components.first,
-                      let portString = components.last,
-                      let port = UInt16(portString) else {
-                    continue
+        logger.info("Bootstrapping DHT with \(bootstrapNodes.count) nodes")
+        
+        await withTaskGroup(of: Void.self) { group in
+            for nodeAddress in bootstrapNodes {
+                group.addTask {
+                    do {
+                        let components = nodeAddress.split(separator: ":")
+                        guard components.count == 2,
+                              let host = components.first,
+                              let portString = components.last,
+                              let port = UInt16(portString) else {
+                            return
+                        }
+                        
+                        let node = DHTNode(
+                            id: Data((0..<20).map { _ in UInt8.random(in: 0...255) }),
+                            address: String(host),
+                            port: port
+                        )
+                        
+                        try await self.ping(node: node)
+                        self.addNode(node)
+                        self.logger.info("Successfully bootstrapped with \(nodeAddress)")
+                        
+                    } catch {
+                        self.logger.warning("Failed to bootstrap with node \(nodeAddress): \(error)")
+                    }
                 }
-                
-                let node = DHTNode(
-                    id: Data((0..<20).map { _ in UInt8.random(in: 0...255) }),
-                    address: String(host),
-                    port: port
-                )
-                
-                try await ping(node: node)
-                addNode(node)
-                
-            } catch {
-                logger.warning("Failed to bootstrap with node \(nodeAddress): \(error)")
             }
         }
     }
     
-    /// Start listening for incoming DHT messages
-    private func startListening() async {
-        guard let connection = udpConnection else { return }
-        
-        while true {
-            do {
-                let data = try await receiveData(from: connection)
-                try await handleIncomingMessage(data)
-            } catch {
-                logger.error("Error receiving DHT message: \(error)")
-            }
-        }
-    }
+
     
     /// Handle incoming DHT message
     private func handleIncomingMessage(_ data: Data) async throws {
@@ -285,25 +307,44 @@ public class DHTClient {
         try await sendQuery(query, to: node)
     }
     
-    /// Get peers from a DHT node
+    /// Get peers from a DHT node with timeout
     private func getPeers(from node: DHTNode, infoHash: Data) async throws -> (peers: [String], nodes: [DHTNode]) {
-        // This would send the query and wait for response
-        // For now, return empty results
-        return (peers: [], nodes: [])
+        let query: [String: Any] = [
+            "t": "gp",
+            "y": "q",
+            "q": "get_peers",
+            "a": [
+                "id": nodeId.base64EncodedString(),
+                "info_hash": infoHash.base64EncodedString()
+            ]
+        ]
+        
+        // Send query with timeout
+        return try await withThrowingTaskGroup(of: (peers: [String], nodes: [DHTNode]).self) { group in
+            group.addTask {
+                try await self.sendQuery(query, to: node)
+                // For now, return empty results as we need to implement proper response handling
+                return (peers: [], nodes: [])
+            }
+            
+            group.addTask {
+                try await Task.sleep(nanoseconds: 5_000_000_000) // 5 second timeout
+                throw DHTError.timeout
+            }
+            
+            let result = try await group.next()!
+            group.cancelAll()
+            return result
+        }
     }
     
     /// Send query to a DHT node
     private func sendQuery(_ query: [String: Any], to node: DHTNode) async throws {
-        guard let data = try? JSONSerialization.data(withJSONObject: query),
-              let connection = udpConnection else {
+        guard let data = try? JSONSerialization.data(withJSONObject: query) else {
             throw DHTError.encodingFailed
         }
         
-        connection.send(content: data, completion: .contentProcessed { error in
-            if let error = error {
-                self.logger.error("Failed to send DHT query: \(error)")
-            }
-        })
+        try await udpSocket.send(data, to: node.address, port: node.port)
     }
     
     /// Send response to a DHT node
@@ -311,36 +352,71 @@ public class DHTClient {
         // Implementation would send response back to the sender
     }
     
-    /// Receive data from UDP connection
-    private func receiveData(from connection: NWConnection) async throws -> Data {
-        return try await withCheckedThrowingContinuation { continuation in
-            connection.receiveMessage { data, context, isComplete, error in
-                if let error = error {
-                    continuation.resume(throwing: error)
-                } else if let data = data {
-                    continuation.resume(returning: data)
-                } else {
-                    continuation.resume(throwing: DHTError.receiveFailed)
+
+    
+    /// Get closest nodes to a target ID using improved algorithm
+    private func getClosestNodes(to targetId: Data, limit: Int) -> [DHTNode] {
+        // Use bucket-based routing for better performance
+        let bucketIndex = getBucketIndex(for: targetId)
+        var nodes: [DHTNode] = []
+        
+        // Get nodes from the target bucket
+        if bucketIndex < buckets.count {
+            nodes.append(contentsOf: buckets[bucketIndex].nodes)
+        }
+        
+        // If not enough nodes, get from neighboring buckets
+        if nodes.count < limit {
+            let startIndex = max(0, bucketIndex - 1)
+            let endIndex = min(buckets.count - 1, bucketIndex + 1)
+            
+            for i in startIndex...endIndex {
+                if i != bucketIndex {
+                    nodes.append(contentsOf: buckets[i].nodes)
                 }
             }
         }
-    }
-    
-    /// Get closest nodes to a target ID
-    private func getClosestNodes(to targetId: Data, limit: Int) -> [DHTNode] {
-        return Array(routingTable.values)
+        
+        // Sort by distance and return top nodes
+        return nodes
             .sorted { node1, node2 in
                 let distance1 = xorDistance(node1.id, targetId)
                 let distance2 = xorDistance(node2.id, targetId)
-                // Compare distances as integers for sorting
                 return distance1.count > 0 && distance2.count > 0 && distance1[0] < distance2[0]
             }
             .prefix(limit)
             .map { $0 }
     }
     
-    /// Add node to routing table
+    /// Get bucket index for a node ID
+    private func getBucketIndex(for nodeId: Data) -> Int {
+        guard nodeId.count > 0 else { return 0 }
+        
+        // Find the first bit that differs from our node ID
+        for i in 0..<min(nodeId.count, self.nodeId.count) {
+            let xor = nodeId[i] ^ self.nodeId[i]
+            if xor != 0 {
+                // Find the highest bit set in the XOR
+                for bit in 0..<8 {
+                    if (xor & (1 << (7 - bit))) != 0 {
+                        return i * 8 + bit
+                    }
+                }
+            }
+        }
+        
+        return 0
+    }
+    
+    /// Add node to routing table using bucket system
     private func addNode(_ node: DHTNode) {
+        let bucketIndex = getBucketIndex(for: node.id)
+        
+        if bucketIndex < buckets.count {
+            buckets[bucketIndex].addNode(node)
+        }
+        
+        // Also add to simple routing table for backward compatibility
         let key = "\(node.address):\(node.port)"
         routingTable[key] = node
     }
@@ -355,6 +431,37 @@ public class DHTClient {
         }
         return result
     }
+}
+
+/// DHT bucket for improved routing
+private struct DHTBucket {
+    private(set) var nodes: [DHTNode] = []
+    private let maxSize: Int
+    
+    init(maxSize: Int) {
+        self.maxSize = maxSize
+    }
+    
+    mutating func addNode(_ node: DHTNode) {
+        // Remove existing node with same address
+        nodes.removeAll { $0.address == node.address && $0.port == node.port }
+        
+        // Add new node
+        nodes.append(node)
+        
+        // Keep only maxSize nodes
+        if nodes.count > maxSize {
+            nodes.removeFirst()
+        }
+    }
+}
+
+/// DHT query for tracking pending requests
+private struct DHTQuery {
+    let id: String
+    let timestamp: Date
+    let node: DHTNode
+    let queryType: String
 }
 
 /// DHT node representation
