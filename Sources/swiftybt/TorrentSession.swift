@@ -5,7 +5,11 @@ import FoundationNetworking
 #endif
 import NIOCore
 import NIOPosix
+#if canImport(CryptoKit)
 import CryptoKit
+#else
+import Crypto
+#endif
 
 /// Piece state for tracking download progress
 struct PieceState {
@@ -21,7 +25,11 @@ struct PieceState {
 
 // Simple SHA1 implementation for piece verification
 private func SHA1_hash(data: Data) -> Data {
+    #if canImport(CryptoKit)
     let hash = Insecure.SHA1.hash(data: data)
+    #else
+    let hash = Insecure.SHA1.hash(data: data)
+    #endif
     return Data(hash.prefix(20)) // Return first 20 bytes to match SHA1 size
 }
 

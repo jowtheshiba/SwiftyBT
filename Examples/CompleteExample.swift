@@ -2,7 +2,11 @@ import Foundation
 import SwiftyBT
 import NIOPosix
 import Logging
+#if canImport(CryptoKit)
 import CryptoKit
+#else
+import Crypto
+#endif
 
 /// Complete example demonstrating SwiftyBT with real torrent usage
 @main
@@ -99,8 +103,11 @@ struct CompleteExample {
     
     /// Simple SHA1 hash function (for demonstration)
     private static func SHA1_hash(data: Data) -> Data {
-        // In a real implementation, use a proper SHA1 library
-        let hash = CryptoKit.SHA256.hash(data: data)
+        #if canImport(CryptoKit)
+        let hash = Insecure.SHA1.hash(data: data)
+        #else
+        let hash = Insecure.SHA1.hash(data: data)
+        #endif
         return Data(hash.prefix(20))
     }
     
