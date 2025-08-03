@@ -80,6 +80,9 @@ public enum TrackerError: Error {
     case trackerFailure(reason: String, responseDetails: String)
     case missingInterval
     case invalidPeerFormat
+    case timeoutError
+    case networkError(String)
+    case encodingError(String)
 }
 
 /// Extension to convert AnnounceEvent to TrackerEvent

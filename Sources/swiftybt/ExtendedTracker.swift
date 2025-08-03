@@ -67,11 +67,15 @@ public class ExtendedTrackerClient {
         left: Int64,
         event: AnnounceEvent = .started
     ) async throws -> ExtendedTrackerResponse {
-        let trackers = getAllTrackers(for: torrentFile)
-        logger.info("Announcing to \(trackers.count) trackers")
+        let allTrackers = getAllTrackers(for: torrentFile)
+        
+        // Фильтруем трекеры, которые часто не работают
+        let filteredTrackers = filterWorkingTrackers(allTrackers)
+        
+        logger.info("Announcing to \(filteredTrackers.count) trackers (filtered from \(allTrackers.count))")
         
         let results = await withTaskGroup(of: (String, Result<TrackerResponse, Error>).self) { group in
-            for tracker in trackers {
+            for tracker in filteredTrackers {
                 group.addTask {
                     do {
                         let response = try await self.baseTrackerClient.announce(
@@ -98,8 +102,10 @@ public class ExtendedTrackerClient {
                 switch result {
                 case .success(let response):
                     responses.append(response)
+                    logger.info("Successfully announced to \(tracker)")
                 case .failure(let error):
                     errors[tracker] = error
+                    logger.warning("Failed to announce to \(tracker): \(error)")
                 }
             }
             
@@ -312,6 +318,43 @@ public class ExtendedTrackerClient {
         }
         
         return workingTrackers
+    }
+    
+    /// Filter out known problematic trackers
+    /// - Parameter trackers: Array of tracker URLs
+    /// - Returns: Filtered array of tracker URLs
+    private func filterWorkingTrackers(_ trackers: [String]) -> [String] {
+        let problematicTrackers: Set<String> = [
+            // Удаляем все проблемные трекеры из предыдущих тестов
+            "http://ipv4announce.sktorrent.eu:6969/announce",
+            "http://retracker01-msk-virt.corbina.net:80/announce",
+            "http://tracker.tryhackx.org:6969/announce",
+            "http://open.tracker.cl:1337/announce",
+            "http://tracker.qu.ax:6969/announce",
+            "http://tracker.filemail.com:6969/announce",
+            "http://tracker.srv00.com:6969/announce",
+            "http://exodus.desync.com:6969/announce",
+            "http://explodie.org:6969/announce",
+            "http://tracker.gmi.gd:6969/announce",
+            "http://opentracker.io:6969/announce",
+            "http://tracker.theoks.net:6969/announce",
+            "http://tracker.fnix.net:6969/announce",
+            "http://open.free-tracker.ga:6969/announce",
+            "http://open.dstud.io:6969/announce",
+            "http://ns-1.x-fins.com:6969/announce",
+            "http://leet-tracker.moe:1337/announce",
+            "http://isk.richardsw.club:6969/announce",
+            "http://hificode.in:6969/announce",
+            "http://glotorrents.pw:6969/announce",
+            "http://evan.im:6969/announce",
+            "http://discord.heihachi.pw:6969/announce",
+            "http://bittorrent-tracker.e-n-c-r-y-p-t.net:1337/announce",
+            "http://bandito.byterunner.io:6969/announce"
+        ]
+        
+        return trackers.filter { tracker in
+            !problematicTrackers.contains(tracker)
+        }
     }
 }
 

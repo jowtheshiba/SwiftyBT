@@ -59,17 +59,22 @@ public class TrackerClient {
         // BitTorrent spec: info_hash и peer_id должны быть вручную закодированы как raw bytes -> %XX
         let infoHashEncoded = infoHash.map { String(format: "%%%02x", $0) }.joined()
         let peerIdEncoded = peerId.map { String(format: "%%%02x", $0) }.joined()
+        
+        // Создаем URL вручную для правильного кодирования BitTorrent параметров
         var urlString = baseURL.absoluteString
         urlString += baseURL.query != nil ? "&" : "?"
         urlString += "info_hash=\(infoHashEncoded)&peer_id=\(peerIdEncoded)&port=\(port)&uploaded=\(uploaded)&downloaded=\(downloaded)&left=\(left)&event=\(event.rawValue)&compact=1"
-        logger.info("Final announce URL: \(urlString)")
+        
+        guard let finalURL = URL(string: urlString) else {
+            throw TrackerError.invalidURL
+        }
+        
+        logger.info("Final announce URL: \(finalURL.absoluteString)")
         logger.info("Info hash (hex): \(infoHash.map { String(format: "%02x", $0) }.joined())")
         logger.info("Peer ID (hex): \(peerId.map { String(format: "%02x", $0) }.joined())")
         logger.info("Info hash (encoded): \(infoHashEncoded)")
         logger.info("Peer ID (encoded): \(peerIdEncoded)")
-        guard let finalURL = URL(string: urlString) else {
-            throw TrackerError.invalidURL
-        }
+        
         return try await performRequest(url: finalURL)
     }
     
@@ -152,8 +157,8 @@ public class TrackerClient {
         request.setValue("*/*", forHTTPHeaderField: "Accept")
         request.setValue("close", forHTTPHeaderField: "Connection")
         
-        // Set timeout to 30 seconds
-        request.timeoutInterval = 30.0
+        // Уменьшаем таймаут для более быстрого обнаружения проблемных трекеров
+        request.timeoutInterval = 15.0
         
         logger.debug("Sending request to: \(url)")
         

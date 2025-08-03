@@ -269,17 +269,18 @@ public class UDPTrackerSocket {
         var peers: [Peer] = []
         let peerData = data.dropFirst(20)
         
-        for i in stride(from: 0, to: peerData.count, by: 6) {
-            guard i + 6 <= peerData.count else { break }
-            
-            let peerBytes = Array(peerData[i..<i+6])
-            
+        if peerData.count % 6 != 0 {
+            logger.warning("UDP announce: peerData length (\(peerData.count)) is not a multiple of 6, ignoring trailing bytes")
+        }
+        
+        for i in stride(from: 0, to: peerData.count - peerData.count % 6, by: 6) {
+            let start = peerData.index(peerData.startIndex, offsetBy: i)
+            let end = peerData.index(start, offsetBy: 6)
+            let peerBytes = Array(peerData[start..<end])
             // Extract IP address
             let ip = peerBytes[0..<4].map { String($0) }.joined(separator: ".")
-            
             // Extract port (big endian)
             let port = UInt16(peerBytes[4]) << 8 | UInt16(peerBytes[5])
-            
             peers.append(Peer(address: ip, port: port))
         }
         
