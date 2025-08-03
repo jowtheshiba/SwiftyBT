@@ -2,25 +2,14 @@ import Foundation
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
-import NIOCore
-import NIOHTTP1
-import NIOPosix
 import Logging
 
 /// BitTorrent tracker client
 public class TrackerClient {
-    private let eventLoopGroup: EventLoopGroup
     private let logger: Logger
     
-    public init(eventLoopGroup: EventLoopGroup? = nil) {
-        self.eventLoopGroup = eventLoopGroup ?? MultiThreadedEventLoopGroup(numberOfThreads: 1)
+    public init() {
         self.logger = Logger(label: "SwiftyBT.Tracker")
-    }
-    
-    deinit {
-        if eventLoopGroup is MultiThreadedEventLoopGroup {
-            try? eventLoopGroup.syncShutdownGracefully()
-        }
     }
     
     /// Announce to tracker and get peer list
@@ -77,17 +66,24 @@ public class TrackerClient {
             throw TrackerError.invalidURL
         }
         
-        var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)!
-        var queryItems = components.queryItems ?? []
+        // Create URL with encoded parameters
+        var urlString = baseURL.absoluteString
+        urlString += baseURL.query != nil ? "&" : "?"
         
-        // Add info hashes
         for infoHash in infoHashes {
-            queryItems.append(URLQueryItem(name: "info_hash", value: infoHash.base64EncodedString()))
+            let infoHashEncoded = infoHash.map { String(format: "%%%02x", $0) }.joined()
+            urlString += "info_hash=\(infoHashEncoded)&"
         }
         
-        components.queryItems = queryItems
+        // Remove trailing &
+        if urlString.hasSuffix("&") {
+            urlString.removeLast()
+        }
         
-        guard let finalURL = components.url else {
+        // Debug: print the scrape URL we're sending
+        print("DEBUG: Sending scrape URL: \(urlString)")
+        
+        guard let finalURL = URL(string: urlString) else {
             throw TrackerError.invalidURL
         }
         
@@ -95,35 +91,62 @@ public class TrackerClient {
     }
     
     private func performRequest(url: URL) async throws -> TrackerResponse {
-        let request = URLRequest(url: url)
-        
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw TrackerError.invalidResponse
+        // Check if it's a UDP tracker
+        if url.scheme?.lowercased() == "udp" {
+            return try await performUDPRequest(url: url)
+        } else {
+            let data = try await performHTTPRequest(url: url)
+            return try parseTrackerResponse(data)
         }
+    }
+    
+    private func performUDPRequest(url: URL) async throws -> TrackerResponse {
+        logger.info("🔗 Using UDP for tracker: \(url)")
         
-        guard httpResponse.statusCode == 200 else {
-            throw TrackerError.httpError(statusCode: httpResponse.statusCode)
-        }
+        // For now, return empty response for UDP trackers
+        // In a real implementation, you'd implement UDP protocol
+        logger.warning("⚠️ UDP tracker support not implemented yet")
         
-        return try parseTrackerResponse(data)
+        return TrackerResponse(
+            interval: 1800,
+            minInterval: nil,
+            complete: nil,
+            incomplete: nil,
+            peers: [],
+            warning: "UDP not supported"
+        )
     }
     
     private func performScrapeRequest(url: URL) async throws -> ScrapeResponse {
-        let request = URLRequest(url: url)
+        let data = try await performHTTPRequest(url: url)
+        return try parseScrapeResponse(data)
+    }
+    
+    private func performHTTPRequest(url: URL) async throws -> Data {
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Transmission/3.00", forHTTPHeaderField: "User-Agent")
+        request.setValue("*/*", forHTTPHeaderField: "Accept")
+        request.setValue("close", forHTTPHeaderField: "Connection")
+        
+        // Set timeout to 30 seconds
+        request.timeoutInterval = 30.0
+        
+        logger.debug("Sending request to: \(url)")
         
         let (data, response) = try await URLSession.shared.data(for: request)
         
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw TrackerError.invalidResponse
+        if let httpResponse = response as? HTTPURLResponse {
+            logger.debug("Response status: \(httpResponse.statusCode)")
+            
+            if httpResponse.statusCode != 200 {
+                let errorBody = String(data: data, encoding: .utf8) ?? "Unable to decode error response"
+                logger.error("HTTP Error \(httpResponse.statusCode): \(errorBody)")
+                throw TrackerError.httpError(statusCode: httpResponse.statusCode, responseBody: errorBody)
+            }
         }
         
-        guard httpResponse.statusCode == 200 else {
-            throw TrackerError.httpError(statusCode: httpResponse.statusCode)
-        }
-        
-        return try parseScrapeResponse(data)
+        return data
     }
     
     private func parseTrackerResponse(_ data: Data) throws -> TrackerResponse {
@@ -136,7 +159,9 @@ public class TrackerClient {
         // Parse failure reason if present
         if let failureReason = dict["failure reason"],
            case .string(let reason) = failureReason {
-            throw TrackerError.trackerFailure(reason: reason)
+            // Try to get more details from the response
+            let responseDetails = String(data: data, encoding: .utf8) ?? "Unable to decode response"
+            throw TrackerError.trackerFailure(reason: reason, responseDetails: responseDetails)
         }
         
         // Parse warning message if present
@@ -200,7 +225,9 @@ public class TrackerClient {
         // Parse failure reason if present
         if let failureReason = dict["failure reason"],
            case .string(let reason) = failureReason {
-            throw TrackerError.trackerFailure(reason: reason)
+            // Try to get more details from the response
+            let responseDetails = String(data: data, encoding: .utf8) ?? "Unable to decode response"
+            throw TrackerError.trackerFailure(reason: reason, responseDetails: responseDetails)
         }
         
         var files: [Data: ScrapeFileInfo] = [:]
@@ -382,8 +409,8 @@ public struct Peer {
 public enum TrackerError: Error {
     case invalidURL
     case invalidResponse
-    case httpError(statusCode: Int)
-    case trackerFailure(reason: String)
+    case httpError(statusCode: Int, responseBody: String)
+    case trackerFailure(reason: String, responseDetails: String)
     case missingInterval
     case invalidPeerFormat
 }
