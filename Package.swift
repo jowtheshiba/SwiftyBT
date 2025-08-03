@@ -13,6 +13,9 @@ let package = Package(
         .library(
             name: "SwiftyBT",
             targets: ["SwiftyBT"]),
+        .executable(
+            name: "SwiftyBTExample",
+            targets: ["SwiftyBTExample"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-crypto.git", from: "2.0.0"),
@@ -30,9 +33,15 @@ let package = Package(
                 .product(name: "NIOHTTP1", package: "swift-nio"),
                 .product(name: "NIOSSL", package: "swift-nio-ssl"),
                 .product(name: "Logging", package: "swift-log")
-            ]),
+            ],
+            path: "Sources"),
+        .executableTarget(
+            name: "SwiftyBTExample",
+            dependencies: ["SwiftyBT"],
+            path: "Examples"),
         .testTarget(
             name: "SwiftyBTTests",
-            dependencies: ["SwiftyBT"]),
+            dependencies: ["SwiftyBT"],
+            path: "Tests"),
     ]
 ) 

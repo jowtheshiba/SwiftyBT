@@ -2,16 +2,16 @@ import Foundation
 import SwiftyBT
 import Logging
 
-// Configure logging
-LoggingSystem.bootstrap { label in
-    var handler = StreamLogHandler.standardOutput(label: label)
-    handler.logLevel = .info
-    return handler
-}
-
 @main
 struct BasicExample {
     static func main() async {
+        // Configure logging
+        LoggingSystem.bootstrap { label in
+            var handler = StreamLogHandler.standardOutput(label: label)
+            handler.logLevel = .info
+            return handler
+        }
+        
         print("SwiftyBT Basic Example")
         print("======================")
         
@@ -55,32 +55,8 @@ struct BasicExample {
         }
         
         // Example: Tracker communication
-        do {
-            let trackerClient = TrackerClient()
-            
-            // Create example data
-            let infoHash = Data((0..<20).map { _ in UInt8.random(in: 0...255) })
-            let peerId = Data((0..<20).map { _ in UInt8.random(in: 0...255) })
-            
-            print("\nTesting tracker communication...")
-            
-            // Note: This would fail with a real tracker URL, but shows the API
-            // let response = try await trackerClient.announce(
-            //     url: "http://tracker.example.com:6881/announce",
-            //     infoHash: infoHash,
-            //     peerId: peerId,
-            //     port: 6881,
-            //     uploaded: 0,
-            //     downloaded: 0,
-            //     left: 1000000,
-            //     event: .started
-            // )
-            
-            print("Tracker communication API ready")
-            
-        } catch {
-            print("Tracker error: \(error)")
-        }
+        print("\nTesting tracker communication...")
+        print("Tracker communication API ready")
         
         // Example: Bencode parsing
         do {

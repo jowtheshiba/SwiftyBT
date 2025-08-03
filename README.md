@@ -1,5 +1,6 @@
 # SwiftyBT
 
+[![Version](https://img.shields.io/badge/Version-1.0.0-blue.svg)](https://github.com/your-username/SwiftyBT)
 [![Swift](https://img.shields.io/badge/Swift-6.0+-orange.svg)](https://swift.org)
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-blue.svg)](https://swift.org)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
