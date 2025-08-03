@@ -29,7 +29,7 @@ public class UDPSocket {
         #if canImport(Darwin)
         socketFD = socket(AF_INET, Int32(SOCK_DGRAM), 0)
         #else
-        socketFD = socket(AF_INET, Int32(SOCK_DGRAM), 0)
+        socketFD = socket(AF_INET, SOCK_DGRAM, 0)
         #endif
         if socketFD == -1 {
             throw UDPSocketError.socketCreationFailed
@@ -138,8 +138,8 @@ public class UDPSocket {
         hints.ai_socktype = Int32(SOCK_DGRAM)
         hints.ai_protocol = Int32(IPPROTO_UDP)
         #else
-        hints.ai_socktype = Int32(SOCK_DGRAM)
-        hints.ai_protocol = Int32(IPPROTO_UDP)
+        hints.ai_socktype = SOCK_DGRAM
+        hints.ai_protocol = IPPROTO_UDP
         #endif
         
         var result: UnsafeMutablePointer<addrinfo>?
