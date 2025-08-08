@@ -1,0 +1,40 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:SwiftyBT}",
+            "name": "Debug SwiftyBTExample",
+            "program": "${workspaceFolder:SwiftyBT}/.build/debug/SwiftyBTExample",
+            "preLaunchTask": "swift: Build Debug SwiftyBTExample"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:SwiftyBT}",
+            "name": "Release SwiftyBTExample",
+            "program": "${workspaceFolder:SwiftyBT}/.build/release/SwiftyBTExample",
+            "preLaunchTask": "swift: Build Release SwiftyBTExample"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:SwiftyBT}",
+            "name": "Debug clt-swiftybt",
+            "program": "${workspaceFolder:SwiftyBT}/.build/debug/clt-swiftybt",
+            "preLaunchTask": "swift: Build Debug clt-swiftybt"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:SwiftyBT}",
+            "name": "Release clt-swiftybt",
+            "program": "${workspaceFolder:SwiftyBT}/.build/release/clt-swiftybt",
+            "preLaunchTask": "swift: Build Release clt-swiftybt"
+        }
+    ]
+}
