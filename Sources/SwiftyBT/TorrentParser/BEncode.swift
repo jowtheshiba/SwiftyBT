@@ -24,6 +24,12 @@ public struct BEncode {
         let consumed = data.distance(from: data.startIndex, to: index)
         return (value, consumed)
     }
+    
+    public static func encode(_ value: BEncodeValue) -> Data {
+        var data = Data()
+        encodeValue(value, into: &data)
+        return data
+    }
 
     private static func decodeValue(_ data: Data, _ index: inout Data.Index) throws -> BEncodeValue {
         guard index < data.endIndex else { throw BEncodeError.invalidFormat("Unexpected EOF") }
@@ -105,6 +111,37 @@ public struct BEncode {
         guard index < data.endIndex, data[index] == UInt8(ascii: "e") else { throw BEncodeError.invalidFormat("dict not terminated") }
         index = data.index(after: index)
         return .dict(dict)
+    }
+    
+    private static func encodeValue(_ value: BEncodeValue, into data: inout Data) {
+        switch value {
+        case .int(let int):
+            data.append("i".data(using: .utf8)!)
+            data.append(String(int).data(using: .utf8)!)
+            data.append("e".data(using: .utf8)!)
+        case .bytes(let bytes):
+            data.append(String(bytes.count).data(using: .utf8)!)
+            data.append(":".data(using: .utf8)!)
+            data.append(bytes)
+        case .list(let list):
+            data.append("l".data(using: .utf8)!)
+            for item in list {
+                encodeValue(item, into: &data)
+            }
+            data.append("e".data(using: .utf8)!)
+        case .dict(let dict):
+            data.append("d".data(using: .utf8)!)
+            // Сортируем ключи для консистентности
+            let sortedKeys = dict.keys.sorted()
+            for key in sortedKeys {
+                let keyData = key.data(using: .utf8)!
+                data.append(String(keyData.count).data(using: .utf8)!)
+                data.append(":".data(using: .utf8)!)
+                data.append(keyData)
+                encodeValue(dict[key]!, into: &data)
+            }
+            data.append("e".data(using: .utf8)!)
+        }
     }
 }
 

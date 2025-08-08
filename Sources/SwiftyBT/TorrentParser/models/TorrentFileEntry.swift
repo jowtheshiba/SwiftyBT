@@ -25,4 +25,18 @@ struct TorrentFileEntry {
             return pathComponent
         }
     }
+    
+    /// Создает BEncodeValue из TorrentFileEntry
+    func toBEncodeValue() -> BEncodeValue {
+        var dict: [String: BEncodeValue] = [:]
+        
+        dict["length"] = .int(length)
+        
+        let pathComponents = path.map { component in
+            BEncodeValue.bytes(component.data(using: .utf8)!)
+        }
+        dict["path"] = .list(pathComponents)
+        
+        return .dict(dict)
+    }
 }

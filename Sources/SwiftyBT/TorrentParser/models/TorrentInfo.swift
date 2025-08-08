@@ -41,4 +41,28 @@ struct TorrentInfo {
             self.length = length
         }
     }
+    
+    /// Создает BEncodeValue из TorrentInfo для вычисления info_hash
+    func toBEncodeValue() -> BEncodeValue {
+        var dict: [String: BEncodeValue] = [:]
+        
+        dict["piece length"] = .int(pieceLength)
+        dict["pieces"] = .bytes(pieces)
+        dict["name"] = .bytes(name.data(using: .utf8)!)
+        
+        if let privateFlag = privateFlag {
+            dict["private"] = .int(privateFlag ? 1 : 0)
+        }
+        
+        if let files = files {
+            // Мног файловый торрент
+            let fileEntries = files.map { $0.toBEncodeValue() }
+            dict["files"] = .list(fileEntries)
+        } else if let length = length {
+            // Однофайловый торрент
+            dict["length"] = .int(length)
+        }
+        
+        return .dict(dict)
+    }
 }
