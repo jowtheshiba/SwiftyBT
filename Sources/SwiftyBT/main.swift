@@ -151,7 +151,10 @@ func searchDHTTrackers(for torrentFile: TorrentFile) {
     print("💡 DHT search is running...")
     print("📊 Found trackers will be displayed below:")
     print("📁 Torrent: \(torrentFile.info.name)")
-    print("📏 Size: \(formatBytes(torrentFile.info.length ?? 0))")
+    
+    // Вычисляем общий размер торрента
+    let totalSize = torrentFile.info.files?.reduce(0) { $0 + $1.length } ?? torrentFile.info.length ?? 0
+    print("📏 Size: \(formatBytes(totalSize))")
     print(String(repeating: "─", count: 50))
     
     let dhtProvider = DHTTrackersProvider()

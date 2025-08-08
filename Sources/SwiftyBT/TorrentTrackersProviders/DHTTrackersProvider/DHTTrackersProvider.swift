@@ -74,7 +74,9 @@ class DHTTrackersProvider: @unchecked Sendable {
         // Начинаем с bootstrap узлов
         let bootstrapNodes = DHTPredefinedNodes.getAllNodes()
         
+        print("🌐 Connecting to \(bootstrapNodes.count) bootstrap DHT nodes...")
         for node in bootstrapNodes {
+            print("   🔗 Connecting to: \(node)")
             connectToDHTNode(node: node, infoHash: infoHash, completion: completion)
         }
         
@@ -194,6 +196,7 @@ class DHTTrackersProvider: @unchecked Sendable {
                                         print("✅ Found DHT tracker: \(trackerString)")
                                         print("   📌 This tracker is specifically for your torrent!")
                                         print("   🎯 Info Hash: \(currentInfoHash)")
+                                        print("   📊 Total DHT trackers found so far: \(foundTrackers.count)")
                                     }
                                 }
                             }
@@ -225,6 +228,8 @@ class DHTTrackersProvider: @unchecked Sendable {
         let nodeSize = 26
         let nodeCount = nodes.count / nodeSize
         
+        print("🔍 Processing \(nodeCount) discovered DHT nodes...")
+        
         for i in 0..<nodeCount {
             let startIndex = i * nodeSize
             let endIndex = startIndex + nodeSize
@@ -252,11 +257,14 @@ class DHTTrackersProvider: @unchecked Sendable {
             
             if !discoveredNodes.contains(nodeAddress) {
                 discoveredNodes.append(nodeAddress)
+                print("   🔗 New DHT node discovered: \(nodeAddress)")
                 
                 // Подключаемся к новому узлу
                 connectToDiscoveredNode(node: nodeAddress)
             }
         }
+        
+        print("📊 Total discovered nodes: \(discoveredNodes.count)")
     }
     
     private func connectToDiscoveredNode(node: String) {
