@@ -107,13 +107,29 @@ func searchDHTTrackers(for magnetLink: MagnetLink) {
     print("\n🔍 Starting DHT tracker search for magnet link...")
     print("💡 DHT search is running...")
     print("📊 Found trackers will be displayed below:")
+    print("🔗 Magnet: \(magnetLink.displayName ?? "Unknown")")
+    print("🆔 Info Hash: \(magnetLink.infoHash)")
     print(String(repeating: "─", count: 50))
     
     let dhtProvider = DHTTrackersProvider()
     dhtProvider.searchTrackers(for: magnetLink) { trackers in
         print("\n" + String(repeating: "─", count: 50))
         print("✅ DHT search completed!")
+        print("🔗 Magnet: \(magnetLink.displayName ?? "Unknown")")
         print("📊 Total found: \(trackers.count) DHT trackers")
+        
+        if trackers.isEmpty {
+            print("❌ No DHT trackers found for this magnet link")
+            print("💡 This could mean:")
+            print("   • The torrent is not active in DHT network")
+            print("   • No peers are currently sharing this torrent")
+            print("   • The torrent uses private trackers only")
+        } else {
+            print("✅ Found DHT trackers for your magnet link:")
+            for (index, tracker) in trackers.enumerated() {
+                print("   \(index + 1). \(tracker.trackerURL) (\(tracker.trackerType))")
+            }
+        }
         
         // Останавливаем поиск
         dhtProvider.stopSearch()
@@ -134,13 +150,29 @@ func searchDHTTrackers(for torrentFile: TorrentFile) {
     print("\n🔍 Starting DHT tracker search for torrent file...")
     print("💡 DHT search is running...")
     print("📊 Found trackers will be displayed below:")
+    print("📁 Torrent: \(torrentFile.info.name)")
+    print("📏 Size: \(formatBytes(torrentFile.info.length ?? 0))")
     print(String(repeating: "─", count: 50))
     
     let dhtProvider = DHTTrackersProvider()
     dhtProvider.searchTrackers(for: torrentFile) { trackers in
         print("\n" + String(repeating: "─", count: 50))
         print("✅ DHT search completed!")
+        print("📁 Torrent: \(torrentFile.info.name)")
         print("📊 Total found: \(trackers.count) DHT trackers")
+        
+        if trackers.isEmpty {
+            print("❌ No DHT trackers found for this torrent")
+            print("💡 This could mean:")
+            print("   • The torrent is not active in DHT network")
+            print("   • No peers are currently sharing this torrent")
+            print("   • The torrent uses private trackers only")
+        } else {
+            print("✅ Found DHT trackers for your torrent:")
+            for (index, tracker) in trackers.enumerated() {
+                print("   \(index + 1). \(tracker.trackerURL) (\(tracker.trackerType))")
+            }
+        }
         
         // Останавливаем поиск
         dhtProvider.stopSearch()
@@ -154,6 +186,13 @@ func searchDHTTrackers(for torrentFile: TorrentFile) {
     // Держим программу запущенной
     print("⏳ Waiting for DHT trackers... (Press Ctrl+C to stop)")
     RunLoop.main.run()
+}
+
+func formatBytes(_ bytes: Int64) -> String {
+    let formatter = ByteCountFormatter()
+    formatter.allowedUnits = [.useGB, .useMB, .useKB]
+    formatter.countStyle = .file
+    return formatter.string(fromByteCount: bytes)
 }
 
 // Основная логика программы
