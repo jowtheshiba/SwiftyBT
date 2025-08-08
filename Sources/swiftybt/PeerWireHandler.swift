@@ -17,12 +17,14 @@ final class PeerWireHandler: ChannelInboundHandler {
     let peerState: PeerState
     private var pieceCallback: ((UInt32, UInt32, Data) -> Void)?
     private var handshakeCompleted = false
+    private var messageBuffer = ByteBuffer() // Buffer for incomplete messages
     
     init(infoHash: Data, peerId: Data) {
         self.infoHash = infoHash
         self.peerId = peerId
         self.logger = Logger(label: "SwiftyBT.PeerWireHandler")
         self.peerState = PeerState()
+        self.messageBuffer = ByteBuffer()
     }
     
     func setPieceCallback(_ callback: @escaping (UInt32, UInt32, Data) -> Void) {
@@ -36,42 +38,72 @@ final class PeerWireHandler: ChannelInboundHandler {
     
     func channelRead(context: ChannelHandlerContext, data: NIOAny) {
         var buffer = unwrapInboundIn(data)
+        logger.info("📥 Received data: \(buffer.readableBytes) bytes, handshake completed: \(handshakeCompleted)")
 
+        // Add new data to our message buffer
+        messageBuffer.writeBuffer(&buffer)
+        
         // Handle handshake first (consume it and continue with remaining bytes)
-        if !handshakeCompleted, buffer.readableBytes >= 68 {
-            let handshakeSlice = buffer.readableBytesView.prefix(68)
+        if !handshakeCompleted, messageBuffer.readableBytes >= 68 {
+            let handshakeSlice = messageBuffer.readableBytesView.prefix(68)
             let handshakeData = Data(handshakeSlice)
             if handleHandshake(handshakeData) {
                 handshakeCompleted = true
                 logger.info("Handshake successful")
-                buffer.moveReaderIndex(forwardBy: 68)
+                messageBuffer.moveReaderIndex(forwardBy: 68)
             } else {
                 context.close(promise: nil)
                 return
             }
         }
-
-        // Handle regular messages
-        while buffer.readableBytes >= 4 {
-            guard let length: UInt32 = buffer.getInteger(at: buffer.readerIndex, endianness: .big, as: UInt32.self) else { break }
+        
+        // Handle regular messages only after handshake
+        if handshakeCompleted {
+            processMessages()
+        }
+    }
+    
+    private func processMessages() {
+        logger.info("📖 Processing messages from buffer: \(messageBuffer.readableBytes) bytes available")
+        
+        // Debug: show first few bytes of buffer
+        if messageBuffer.readableBytes > 0 {
+            let debugBytes = messageBuffer.getBytes(at: messageBuffer.readerIndex, length: min(16, messageBuffer.readableBytes)) ?? []
+            let hexString = debugBytes.map { String(format: "%02x", $0) }.joined(separator: " ")
+            logger.info("🔍 First bytes: \(hexString)")
+        }
+        
+        while messageBuffer.readableBytes >= 4 {
+            guard let length: UInt32 = messageBuffer.getInteger(at: messageBuffer.readerIndex, endianness: .big, as: UInt32.self) else { break }
             let messageLength = Int(length)
 
-            if buffer.readableBytes < messageLength + 4 {
+            logger.info("📏 Message length: \(messageLength), buffer has: \(messageBuffer.readableBytes) bytes")
+
+            // Check if we have complete message
+            if messageBuffer.readableBytes < messageLength + 4 {
+                logger.info("⏳ Incomplete message (need \(messageLength + 4), have \(messageBuffer.readableBytes)), waiting for more data")
                 break
             }
 
             // consume length (big endian)
-            _ = buffer.readInteger(endianness: .big, as: UInt32.self)
+            _ = messageBuffer.readInteger(endianness: .big, as: UInt32.self)
 
             if messageLength == 0 {
-                // keep-alive
+                logger.info("💓 Keep-alive message received")
                 continue
             }
 
-            guard let messageId: UInt8 = buffer.readInteger(as: UInt8.self) else { break }
+            guard let messageId: UInt8 = messageBuffer.readInteger(as: UInt8.self) else { 
+                logger.error("❌ Failed to read message ID")
+                break 
+            }
             let payloadLen = messageLength - 1
-            guard let payloadBytes = buffer.readBytes(length: payloadLen) else { break }
+            guard let payloadBytes = messageBuffer.readBytes(length: payloadLen) else { 
+                logger.error("❌ Failed to read payload bytes")
+                break 
+            }
             let payload = Data(payloadBytes)
+            logger.info("📨 Complete message: id=\(messageId), payload=\(payloadLen) bytes")
             handleMessage(id: messageId, payload: payload)
         }
     }
@@ -123,6 +155,7 @@ final class PeerWireHandler: ChannelInboundHandler {
     }
     
     private func handleMessage(id: UInt8, payload: Data) {
+        logger.info("📨 Received message: id=\(id), payload size=\(payload.count)")
         Task {
             switch id {
             case 0: // choke
@@ -171,8 +204,13 @@ final class PeerWireHandler: ChannelInboundHandler {
                 logger.info("📦 Received piece: \(pieceIndex), offset: \(offset), data size: \(data.count)")
                 
                 if let callback = pieceCallback {
+                    logger.debug("🔄 Calling piece callback for piece \(pieceIndex)")
                     callback(pieceIndex, offset, data)
+                } else {
+                    logger.warning("⚠️ No piece callback set!")
                 }
+            } else {
+                logger.error("❌ Invalid piece message: payload too small (\(payload.count) bytes)")
             }
             
         case 8: // cancel
