@@ -1,5 +1,6 @@
 import Foundation
 
+@available(iOS 13.0, macOS 10.15, *)
 actor TorrentTrackersClient {
     
     private var trackers: Set<TorrentURLTracker> = []
@@ -84,7 +85,7 @@ actor TorrentTrackersClient {
     /// Удаляет трекер по URL
     /// - Parameter url: URL трекера для удаления
     func removeTracker(withURL url: String) {
-        trackers = trackers.filter { $0.trackerURL != url }
+        trackers.removeAll()
     }
     
     /// Очищает все трекеры
