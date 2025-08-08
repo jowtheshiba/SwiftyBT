@@ -2,7 +2,7 @@ import Foundation
 import Network
 import CryptoKit
 
-@available(macOS 10.15, *)
+@available(iOS 13.0, macOS 10.15, *)
 class DHTTrackersProvider: @unchecked Sendable {
     
     private var udpSocket: NWConnection?

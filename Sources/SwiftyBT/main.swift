@@ -59,6 +59,7 @@ func parseArguments() -> (input: String, detailed: Bool, dht: Bool) {
     return (input, detailed, dht)
 }
 
+@available(iOS 13.0, macOS 10.15, *)
 func processInput(_ input: String, detailed: Bool, dht: Bool) {
     print("SwiftyBT - Torrent Parser")
     print("Processing: \(input)")
@@ -71,12 +72,8 @@ func processInput(_ input: String, detailed: Bool, dht: Bool) {
             MagnetParser.printMagnetInfo(magnetLink)
             
             if dht {
-                if #available(macOS 10.15, *) {
-                    searchDHTTrackers(for: magnetLink)
-                } else {
-                    print("❌ DHT search requires macOS 10.15 or later")
-                    exit(1)
-                }
+                searchDHTTrackers(for: magnetLink)
+                
             }
         } catch {
             print("Error parsing magnet link: \(error)")
@@ -93,12 +90,8 @@ func processInput(_ input: String, detailed: Bool, dht: Bool) {
             }
             
             if dht {
-                if #available(macOS 10.15, *) {
-                    searchDHTTrackers(for: torrentFile)
-                } else {
-                    print("❌ DHT search requires macOS 10.15 or later")
-                    exit(1)
-                }
+                searchDHTTrackers(for: torrentFile)
+                
             }
         } catch {
             print("Error parsing torrent file: \(error)")
@@ -109,7 +102,7 @@ func processInput(_ input: String, detailed: Bool, dht: Bool) {
     }
 }
 
-@available(macOS 10.15, *)
+@available(iOS 13.0, macOS 10.15, *)
 func searchDHTTrackers(for magnetLink: MagnetLink) {
     print("\n🔍 Starting DHT tracker search for magnet link...")
     print("💡 DHT search is running...")
@@ -136,7 +129,7 @@ func searchDHTTrackers(for magnetLink: MagnetLink) {
     RunLoop.main.run()
 }
 
-@available(macOS 10.15, *)
+@available(iOS 13.0, macOS 10.15, *)
 func searchDHTTrackers(for torrentFile: TorrentFile) {
     print("\n🔍 Starting DHT tracker search for torrent file...")
     print("💡 DHT search is running...")
@@ -164,6 +157,12 @@ func searchDHTTrackers(for torrentFile: TorrentFile) {
 }
 
 // Основная логика программы
-let (input, detailed, dht) = parseArguments()
-processInput(input, detailed: detailed, dht: dht)
+
+
+if #available(iOS 13.0, macOS 10.15, *) {
+    let (input, detailed, dht) = parseArguments()
+    processInput(input, detailed: detailed, dht: dht)
+} else {
+    // Fallback on earlier versions
+}
 
