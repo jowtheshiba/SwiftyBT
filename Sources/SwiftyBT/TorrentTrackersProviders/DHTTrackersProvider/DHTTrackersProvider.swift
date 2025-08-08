@@ -84,6 +84,7 @@ class DHTTrackersProvider: @unchecked Sendable {
         DispatchQueue.main.asyncAfter(deadline: .now() + 30) { [weak self] in
             if self?.isSearching == true {
                 print("⏰ DHT search timeout reached")
+                print("📊 Final found trackers count: \(self?.foundTrackers.count ?? 0)")
                 self?.stopSearch()
                 completion(self?.foundTrackers ?? [])
             }
@@ -141,6 +142,8 @@ class DHTTrackersProvider: @unchecked Sendable {
         // Создаем DHT GET_PEERS запрос
         let query = createDHTGetPeersQuery(infoHash: infoHash)
         
+        print("🔍 Sending GET_PEERS query for info_hash: \(infoHash)")
+        
         connection.send(content: query, completion: .contentProcessed { [weak self] error in
             if let error = error {
                 print("❌ Failed to send GET_PEERS query: \(error)")
@@ -186,17 +189,67 @@ class DHTTrackersProvider: @unchecked Sendable {
                                 print("🎯 Found \(values.count) trackers for your torrent!")
                                 
                                 for value in values {
-                                    if let trackerData = value.dataValue,
-                                       let trackerString = String(data: trackerData, encoding: .utf8) {
-                                        let tracker = TorrentURLTracker(
-                                            trackerURL: trackerString,
-                                            trackerType: .udp
-                                        )
-                                        foundTrackers.append(tracker)
-                                        print("✅ Found DHT tracker: \(trackerString)")
-                                        print("   📌 This tracker is specifically for your torrent!")
-                                        print("   🎯 Info Hash: \(currentInfoHash)")
-                                        print("   📊 Total DHT trackers found so far: \(foundTrackers.count)")
+                                    if let trackerData = value.dataValue {
+                                        // Пробуем разные кодировки
+                                        var trackerString: String?
+                                        
+                                        // Пробуем UTF-8
+                                        if let utf8String = String(data: trackerData, encoding: .utf8) {
+                                            trackerString = utf8String
+                                        }
+                                        // Пробуем ASCII
+                                        else if let asciiString = String(data: trackerData, encoding: .ascii) {
+                                            trackerString = asciiString
+                                        }
+                                        // Пробуем ISO-8859-1
+                                        else if let isoString = String(data: trackerData, encoding: .isoLatin1) {
+                                            trackerString = isoString
+                                        }
+                                        
+                                        if let trackerString = trackerString {
+                                            let tracker = TorrentURLTracker(
+                                                trackerURL: trackerString,
+                                                trackerType: .udp
+                                            )
+                                            foundTrackers.append(tracker)
+                                            print("✅ Found DHT tracker: \(trackerString)")
+                                            print("   📌 This tracker is specifically for your torrent!")
+                                            print("   🎯 Info Hash: \(currentInfoHash)")
+                                            print("   📊 Total DHT trackers found so far: \(foundTrackers.count)")
+                                        } else {
+                                            // Пробуем обработать как бинарный трекер (IP:Port)
+                                            if trackerData.count == 6 {
+                                                let ipBytes = Array(trackerData.prefix(4))
+                                                let portBytes = Array(trackerData.suffix(2))
+                                                
+                                                let ipString = ipBytes.map { String($0) }.joined(separator: ".")
+                                                let portValue = UInt16(portBytes[0]) << 8 | UInt16(portBytes[1])
+                                                
+                                                let trackerURL = "\(ipString):\(portValue)"
+                                                let tracker = TorrentURLTracker(
+                                                    trackerURL: trackerURL,
+                                                    trackerType: .udp
+                                                )
+                                                foundTrackers.append(tracker)
+                                                print("✅ Found DHT tracker (binary): \(trackerURL)")
+                                                print("   📌 This tracker is specifically for your torrent!")
+                                                print("   🎯 Info Hash: \(currentInfoHash)")
+                                                print("   📊 Total DHT trackers found so far: \(foundTrackers.count)")
+                                            } else {
+                                                print("⚠️ Failed to parse tracker data (size: \(trackerData.count) bytes)")
+                                                print("   🔍 Tracker data: \(trackerData.map { String(format: "%02x", $0) }.joined())")
+                                            }
+                                        }
+                                    } else {
+                                        print("⚠️ Failed to parse tracker data")
+                                    }
+                                }
+                                
+                                // Если нашли трекеры, выводим их все
+                                if !foundTrackers.isEmpty {
+                                    print("🎉 SUCCESS! Found \(foundTrackers.count) DHT trackers for your torrent:")
+                                    for (index, tracker) in foundTrackers.enumerated() {
+                                        print("   \(index + 1). \(tracker.trackerURL)")
                                     }
                                 }
                             }
@@ -219,7 +272,7 @@ class DHTTrackersProvider: @unchecked Sendable {
                 }
             }
         } catch {
-            // Игнорируем ошибки парсинга
+            print("⚠️ Failed to parse DHT response: \(error)")
         }
     }
     
