@@ -7,7 +7,7 @@ import NIOPosix
 import Logging
 
 /// NIO channel handler for peer wire protocol
-final class PeerWireHandler: ChannelInboundHandler, Sendable {
+final class PeerWireHandler: ChannelInboundHandler {
     typealias InboundIn = ByteBuffer
     typealias OutboundOut = ByteBuffer
     
@@ -16,6 +16,7 @@ final class PeerWireHandler: ChannelInboundHandler, Sendable {
     private let logger: Logger
     let peerState: PeerState
     private var pieceCallback: ((UInt32, UInt32, Data) -> Void)?
+    private var handshakeCompleted = false
     
     init(infoHash: Data, peerId: Data) {
         self.infoHash = infoHash
@@ -35,84 +36,89 @@ final class PeerWireHandler: ChannelInboundHandler, Sendable {
     
     func channelRead(context: ChannelHandlerContext, data: NIOAny) {
         var buffer = unwrapInboundIn(data)
-        
-        // Handle handshake first
-        if buffer.readableBytes >= 68 {
-            let handshakeData = Data(buffer.readableBytesView.prefix(68))
+
+        // Handle handshake first (consume it and continue with remaining bytes)
+        if !handshakeCompleted, buffer.readableBytes >= 68 {
+            let handshakeSlice = buffer.readableBytesView.prefix(68)
+            let handshakeData = Data(handshakeSlice)
             if handleHandshake(handshakeData) {
+                handshakeCompleted = true
                 logger.info("Handshake successful")
+                buffer.moveReaderIndex(forwardBy: 68)
+            } else {
+                context.close(promise: nil)
                 return
             }
         }
-        
+
         // Handle regular messages
         while buffer.readableBytes >= 4 {
-            let length = buffer.getInteger(at: buffer.readerIndex, as: UInt32.self)!
-            let messageLength = Int(length.bigEndian)
-            
+            guard let length: UInt32 = buffer.getInteger(at: buffer.readerIndex, endianness: .big, as: UInt32.self) else { break }
+            let messageLength = Int(length)
+
             if buffer.readableBytes < messageLength + 4 {
                 break
             }
-            
-            buffer.moveReaderIndex(forwardBy: 4)
-            
+
+            // consume length (big endian)
+            _ = buffer.readInteger(endianness: .big, as: UInt32.self)
+
             if messageLength == 0 {
-                // Keep-alive message
+                // keep-alive
                 continue
             }
-            
-            let messageId = buffer.getInteger(at: buffer.readerIndex, as: UInt8.self)!
-            buffer.moveReaderIndex(forwardBy: 1)
-            
-            let payload = Data(buffer.readableBytesView.prefix(messageLength - 1))
+
+            guard let messageId: UInt8 = buffer.readInteger(as: UInt8.self) else { break }
+            let payloadLen = messageLength - 1
+            guard let payloadBytes = buffer.readBytes(length: payloadLen) else { break }
+            let payload = Data(payloadBytes)
             handleMessage(id: messageId, payload: payload)
         }
     }
     
     private func sendHandshake(context: ChannelHandlerContext) {
         var buffer = context.channel.allocator.buffer(capacity: 68)
-        
+        // pstrlen
+        buffer.writeInteger(UInt8(19))
         // Protocol string (19 bytes)
         buffer.writeString("BitTorrent protocol")
-        
         // Reserved bytes (8 bytes)
         buffer.writeBytes([0, 0, 0, 0, 0, 0, 0, 0])
-        
         // Info hash (20 bytes)
         buffer.writeBytes(infoHash)
-        
         // Peer ID (20 bytes)
         buffer.writeBytes(peerId)
-        
         context.writeAndFlush(wrapOutboundOut(buffer), promise: nil)
     }
     
     private func handleHandshake(_ data: Data) -> Bool {
-        guard data.count == 68 else {
+        guard data.count >= 68 else {
             logger.error("Handshake failed: invalid data length \(data.count)")
             return false
         }
-        
-        // Check protocol string
-        let protocolString = String(data: data[0..<19], encoding: .ascii)
-        guard protocolString == "BitTorrent protocol" else {
-            logger.error("Handshake failed: invalid protocol string '\(protocolString ?? "nil")'")
+        // pstrlen
+        let pstrlen = data[0]
+        guard pstrlen == 19 else {
+            logger.error("Handshake failed: invalid pstrlen \(pstrlen)")
             return false
         }
-        
+        // Check protocol string
+        let protoStart = 1
+        let protoEnd = protoStart + Int(pstrlen)
+        let protocolString = String(data: data[protoStart..<protoEnd], encoding: .ascii)
+        guard protocolString == "BitTorrent protocol" else {
+            logger.error("Handshake failed: invalid protocol string '")
+            return false
+        }
         // Extract info hash and peer ID
+        // Layout: 1 + 19 (proto) + 8 (reserved) + 20 (infohash) + 20 (peerid)
         let receivedInfoHash = data[28..<48]
         let receivedPeerId = data[48..<68]
-        
-        // Verify info hash
         guard receivedInfoHash == infoHash else {
             logger.error("Handshake failed: info hash mismatch")
-            logger.error("Expected: \(infoHash.map { String(format: "%02x", $0) }.joined())")
-            logger.error("Received: \(receivedInfoHash.map { String(format: "%02x", $0) }.joined())")
             return false
         }
-        
-        logger.info("Handshake successful with peer: \(receivedPeerId.map { String(format: "%02x", $0) }.joined())")
+        logger.debug("Peer ID: \(receivedPeerId.map { String(format: "%02x", $0) }.joined())")
         return true
     }
     
@@ -145,6 +151,9 @@ final class PeerWireHandler: ChannelInboundHandler, Sendable {
                 let bitfield = bytesToBitfield(payload)
                 await peerState.updateBitfield(bitfield)
                 logger.info("📋 Received bitfield with \(bitfield.count) pieces")
+                // Immediately express interest if peer has anything we need
+                // (actual piece selection is handled elsewhere)
+                
             
         case 6: // request
             if payload.count == 12 {
@@ -158,15 +167,11 @@ final class PeerWireHandler: ChannelInboundHandler, Sendable {
             if payload.count >= 8 {
                 let pieceIndex = payload[0..<4].withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
                 let offset = payload[4..<8].withUnsafeBytes { $0.load(as: UInt32.self).bigEndian }
-                let data = payload[8...]
+                let data = payload.subdata(in: 8..<payload.count)
                 logger.info("📦 Received piece: \(pieceIndex), offset: \(offset), data size: \(data.count)")
                 
-                // Call piece callback if set
                 if let callback = pieceCallback {
-                    logger.info("🎯 Calling piece callback")
                     callback(pieceIndex, offset, data)
-                } else {
-                    logger.warning("⚠️ No piece callback set")
                 }
             }
             

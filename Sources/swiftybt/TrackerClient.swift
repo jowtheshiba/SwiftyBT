@@ -179,10 +179,7 @@ public class TrackerClient {
     
     private func parseTrackerResponse(_ data: Data) throws -> TrackerResponse {
         let bencodeValue = try Bencode.parse(data)
-        
-        guard case .dictionary(let dict) = bencodeValue else {
-            throw TrackerError.invalidResponse
-        }
+        guard case .dictionary(let dict) = bencodeValue else { throw TrackerError.invalidResponse }
         
         // Parse failure reason if present
         if let failureReason = dict["failure reason"],
@@ -230,8 +227,14 @@ public class TrackerClient {
             incomplete = nil
         }
         
-        // Parse peers
-        let peers = try parsePeers(dict["peers"])
+        // Parse peers (support both compact binary and dictionary forms), plus IPv6 peers6 if present
+        var peers: [Peer] = []
+        if let peersVal = dict["peers"] {
+            do { peers.append(contentsOf: try parsePeers(peersVal)) } catch { logger.warning("Failed to parse peers: \(error)") }
+        }
+        if let peers6Val = dict["peers6"] {
+            do { peers.append(contentsOf: try parsePeers(peers6Val, isIPv6: true)) } catch { logger.warning("Failed to parse peers6: \(error)") }
+        }
         
         return TrackerResponse(
             interval: Int(interval),
@@ -299,43 +302,67 @@ public class TrackerClient {
         return ScrapeResponse(files: files)
     }
     
-    private func parsePeers(_ peersValue: Bencode.Value?) throws -> [Peer] {
-        guard let peersValue = peersValue else { return [] }
-        
+    private func parsePeers(_ peersValue: Bencode.Value, isIPv6: Bool = false) throws -> [Peer] {
         switch peersValue {
-        case .string(let peersString):
-            // Compact format: 6 bytes per peer (4 bytes IP + 2 bytes port)
-            return try parseCompactPeers(peersString)
+        case .binary(let data):
+            // Compact binary format
+            return try parseCompactPeersData(data, isIPv6: isIPv6)
+        case .string(let string):
+            // Some trackers incorrectly send compact bytes as a UTF-8 string; try to recover bytes
+            if let raw = string.data(using: .isoLatin1) {
+                return try parseCompactPeersData(raw, isIPv6: isIPv6)
+            } else {
+                // fallback to utf8
+                let data = Data(string.utf8)
+                return try parseCompactPeersData(data, isIPv6: isIPv6)
+            }
         case .list(let peersList):
-            // Dictionary format
             return try parseDictionaryPeers(peersList)
         default:
             return []
         }
     }
-    
-    private func parseCompactPeers(_ peersString: String) throws -> [Peer] {
-        let data = Data(peersString.utf8)
-        guard data.count % 6 == 0 else {
-            throw TrackerError.invalidPeerFormat
-        }
-        
+
+    private func parseCompactPeersData(_ data: Data, isIPv6: Bool) throws -> [Peer] {
         var peers: [Peer] = []
-        
-        for i in stride(from: 0, to: data.count, by: 6) {
-            let peerData = data[i..<(i + 6)]
-            
-            // Extract IP address (first 4 bytes)
-            let ipBytes = Array(peerData.prefix(4))
-            let ip = ipBytes.map { String($0) }.joined(separator: ".")
-            
-            // Extract port (last 2 bytes, big endian)
-            let portBytes = Array(peerData.suffix(2))
-            let port = UInt16(portBytes[0]) << 8 | UInt16(portBytes[1])
-            
-            peers.append(Peer(address: ip, port: port))
+        let bytes = [UInt8](data)
+        if isIPv6 {
+            // 18 bytes per peer: 16 bytes IP + 2 bytes port
+            guard bytes.count >= 18 else { return [] }
+            let usable = bytes.count - (bytes.count % 18)
+            var i = 0
+            while i + 18 <= usable {
+                // IPv6: 8 groups of 2 bytes
+                var groups: [String] = []
+                groups.reserveCapacity(8)
+                var j = 0
+                while j < 16 {
+                    let hi = bytes[i + j]
+                    let lo = bytes[i + j + 1]
+                    groups.append(String(format: "%02x%02x", hi, lo))
+                    j += 2
+                }
+                let ip = groups.joined(separator: ":")
+                let portHi = bytes[i + 16]
+                let portLo = bytes[i + 17]
+                let port = (UInt16(portHi) << 8) | UInt16(portLo)
+                peers.append(Peer(address: ip, port: port))
+                i += 18
+            }
+        } else {
+            // 6 bytes per peer: 4 bytes IP + 2 bytes port
+            guard bytes.count >= 6 else { return [] }
+            let usable = bytes.count - (bytes.count % 6)
+            var i = 0
+            while i + 6 <= usable {
+                let ip = [bytes[i], bytes[i+1], bytes[i+2], bytes[i+3]].map { String($0) }.joined(separator: ".")
+                let portHi = bytes[i + 4]
+                let portLo = bytes[i + 5]
+                let port = (UInt16(portHi) << 8) | UInt16(portLo)
+                peers.append(Peer(address: ip, port: port))
+                i += 6
+            }
         }
-        
         return peers
     }
     

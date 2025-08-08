@@ -464,11 +464,24 @@ public class TorrentSession {
         let pieceLength = torrentFile.info.pieceLength
         let blockSize = 16384 // 16KB blocks
         
-        // Request a few pieces at a time
-        var requestedCount = 0
-        let maxConcurrentRequests = 5
+        // Request a few small blocks at a time
+        var requestedBlocks = 0
+        let maxConcurrentBlocks = 8
         
-        for pieceIndex in 0..<torrentFile.info.pieces.count {
+        // Only request pieces the peer actually has (based on its bitfield)
+        let peerBitfield = await connection.getPeerBitfield()
+        if peerBitfield == nil {
+            logger.debug("Peer bitfield not received yet; skipping request cycle")
+            return
+        }
+        let bitfield = peerBitfield!
+
+        // Start from a pseudo-random offset to avoid thundering herd on piece 0
+        let totalPieces = torrentFile.info.pieces.count
+        let startIndex = Int.random(in: 0..<max(1, totalPieces))
+        
+        for offsetIndex in 0..<totalPieces {
+            let pieceIndex = (startIndex + offsetIndex) % totalPieces
             guard !completedPieces.contains(pieceIndex) else {
                 continue
             }
@@ -477,31 +490,39 @@ public class TorrentSession {
                 continue
             }
             
-            if requestedCount >= maxConcurrentRequests {
+            // Skip if peer does not have this piece (or bitfield shorter)
+            if pieceIndex >= bitfield.count || bitfield[pieceIndex] == false {
+                continue
+            }
+            
+            if requestedBlocks >= maxConcurrentBlocks {
                 break
             }
             
             logger.info("Requesting piece: \(pieceIndex)")
             requestedPieces.insert(pieceIndex)
-            requestedCount += 1
-            
+
             let pieceSize = min(pieceLength, torrentFile.getTotalSize() - pieceIndex * pieceLength)
-            
-            for offset in stride(from: 0, to: pieceSize, by: blockSize) {
-                let blockSize = min(UInt32(blockSize), UInt32(pieceSize - offset))
-                
+            let firstOffsets = Array(stride(from: 0, to: min(pieceSize, blockSize * 4), by: blockSize))
+
+            for offset in firstOffsets {
+                if requestedBlocks >= maxConcurrentBlocks { break }
+                // re-check choked state before each request
+                if await connection.isPeerChoked() { break }
+
+                let reqLen = min(UInt32(blockSize), UInt32(pieceSize - offset))
                 try await connection.sendRequest(
                     pieceIndex: UInt32(pieceIndex),
                     offset: UInt32(offset),
-                    length: blockSize
+                    length: reqLen
                 )
-                
+                requestedBlocks += 1
                 // Small delay to avoid overwhelming the peer
-                try await Task.sleep(nanoseconds: 10_000_000) // 10ms
+                try await Task.sleep(nanoseconds: 5_000_000) // 5ms
             }
         }
         
-        logger.info("Requested \(requestedCount) pieces")
+        logger.info("Requested \(requestedBlocks) blocks")
     }
     
     private func handlePieceData(pieceIndex: UInt32, offset: UInt32, data: Data) async {
@@ -520,16 +541,15 @@ public class TorrentSession {
         
         // Store piece data
         if pieceData[index] == nil {
-            pieceData[index] = Data()
+            pieceData[index] = Data(count: pieceState.size)
         }
         
-        // Ensure piece data is large enough
-        while pieceData[index]!.count < Int(offset) + data.count {
-            pieceData[index]!.append(0)
+        // Clamp write range into piece bounds to avoid OOB
+        let start = Int(offset)
+        let end = min(start + data.count, pieceState.size)
+        if start < end {
+            pieceData[index]!.replaceSubrange(start..<end, with: data.prefix(end - start))
         }
-        
-        // Insert data at correct offset
-        pieceData[index]!.replaceSubrange(Int(offset)..<Int(offset) + data.count, with: data)
         
         logger.info("📊 Piece \(index) progress: \(pieceData[index]!.count)/\(pieceState.size) bytes")
         
@@ -575,7 +595,7 @@ public class TorrentSession {
     }
     
     private func writePieceToFile(index: Int, data: Data) async throws {
-        guard let downloadPath = downloadPath else { return }
+        guard downloadPath != nil else { return }
         
         let pieceLength = torrentFile.info.pieceLength
         let pieceOffset = index * pieceLength

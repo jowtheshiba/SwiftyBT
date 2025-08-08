@@ -9,6 +9,7 @@ public class DHTClient {
     private let port: UInt16
     private let udpSocket: UDPSocket
     private let queue = DispatchQueue(label: "dht.client", qos: .utility)
+    private let queueKey = DispatchSpecificKey<Bool>()
     
     // Improved routing table with buckets
     private var buckets: [DHTBucket] = []
@@ -28,6 +29,9 @@ public class DHTClient {
         for _ in 0..<maxBuckets {
             buckets.append(DHTBucket(maxSize: maxBucketSize))
         }
+
+        // Mark queue for reentrancy detection
+        queue.setSpecific(key: queueKey, value: true)
     }
     
     /// Start DHT client
@@ -359,27 +363,35 @@ public class DHTClient {
     
     /// Get closest nodes to a target ID using improved algorithm
     private func getClosestNodes(to targetId: Data, limit: Int) -> [DHTNode] {
+        // Take a snapshot of buckets under synchronization to avoid races
+        let snapshotBuckets: [DHTBucket]
+        if DispatchQueue.getSpecific(key: queueKey) == true {
+            snapshotBuckets = self.buckets
+        } else {
+            snapshotBuckets = queue.sync { self.buckets }
+        }
+
         // Use bucket-based routing for better performance
         let bucketIndex = getBucketIndex(for: targetId)
         var nodes: [DHTNode] = []
-        
+
         // Get nodes from the target bucket
-        if bucketIndex < buckets.count {
-            nodes.append(contentsOf: buckets[bucketIndex].nodes)
+        if bucketIndex < snapshotBuckets.count {
+            nodes.append(contentsOf: snapshotBuckets[bucketIndex].nodes)
         }
-        
+
         // If not enough nodes, get from neighboring buckets
         if nodes.count < limit {
             let startIndex = max(0, bucketIndex - 1)
-            let endIndex = min(buckets.count - 1, bucketIndex + 1)
-            
+            let endIndex = min(snapshotBuckets.count - 1, bucketIndex + 1)
+
             for i in startIndex...endIndex {
                 if i != bucketIndex {
-                    nodes.append(contentsOf: buckets[i].nodes)
+                    nodes.append(contentsOf: snapshotBuckets[i].nodes)
                 }
             }
         }
-        
+
         // Sort by distance and return top nodes
         return nodes
             .sorted { node1, node2 in
@@ -413,16 +425,14 @@ public class DHTClient {
     
     /// Add node to routing table using bucket system
     private func addNode(_ node: DHTNode) {
-        let bucketIndex = getBucketIndex(for: node.id)
-        
-        if bucketIndex < buckets.count {
-            buckets[bucketIndex].addNode(node)
-        }
-        
-        // Also add to simple routing table for backward compatibility
-        let key = "\(node.address):\(node.port)"
-        DispatchQueue.main.sync {
-            routingTable[key] = node
+        // Serialize bucket and routing table updates to avoid data races
+        queue.async {
+            let bucketIndex = self.getBucketIndex(for: node.id)
+            if bucketIndex < self.buckets.count {
+                self.buckets[bucketIndex].addNode(node)
+            }
+            let key = "\(node.address):\(node.port)"
+            self.routingTable[key] = node
         }
     }
     
